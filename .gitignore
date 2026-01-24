@@ -49,3 +49,12 @@ Pods/
 *.pem
 *.key
 secrets/
+
+# Screenshots and design assets
+*.png
+*.jpg
+*.jpeg
+docs/screenshots/
+
+# Claude AI workspace
+.claude/
