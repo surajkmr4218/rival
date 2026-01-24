@@ -145,7 +145,7 @@ async def get_commits(
 
 
 @router.get("/oauth-url")
-def get_oauth_url():
+def get_oauth_url(redirect_uri: str | None = None):
     """Get the GitHub OAuth URL for the frontend to redirect to."""
     if not settings.GITHUB_CLIENT_ID:
         raise HTTPException(
@@ -159,8 +159,10 @@ def get_oauth_url():
         f"&scope=read:user"
     )
 
-    # Add redirect_uri if configured
-    if settings.GITHUB_REDIRECT_URI:
+    # Use provided redirect_uri or fall back to configured one
+    if redirect_uri:
+        oauth_url += f"&redirect_uri={redirect_uri}"
+    elif settings.GITHUB_REDIRECT_URI:
         oauth_url += f"&redirect_uri={settings.GITHUB_REDIRECT_URI}"
 
-    return {"url": oauth_url}
+    return {"url": oauth_url, "client_id": settings.GITHUB_CLIENT_ID}

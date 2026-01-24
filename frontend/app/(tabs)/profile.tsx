@@ -6,8 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import { useAuth } from '../_store/auth';
 import { colors } from '../_theme';
-import { getGitHubStatus, disconnectGitHub, connectGitHub } from '../_api/client';
-import { GITHUB_CLIENT_ID } from '../_config';
+import { getGitHubStatus, getGitHubOAuthUrl, disconnectGitHub, connectGitHub } from '../_api/client';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
@@ -51,8 +50,9 @@ export default function ProfileScreen() {
         path: 'github/callback',
       });
 
-      // Build GitHub OAuth URL
-      const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=read:user`;
+      // Get client_id from backend and build OAuth URL
+      const oauthResponse = await getGitHubOAuthUrl(redirectUri);
+      const authUrl = oauthResponse.data.url;
 
       // Open browser and wait for redirect
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);

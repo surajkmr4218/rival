@@ -49,7 +49,8 @@ export const declineChallenge = (id: number) => api.post(`/api/challenges/${id}/
 
 // GitHub
 export const getGitHubStatus = () => api.get('/api/github/status');
-export const getGitHubOAuthUrl = () => api.get('/api/github/oauth-url');
+export const getGitHubOAuthUrl = (redirectUri?: string) =>
+  api.get('/api/github/oauth-url', { params: redirectUri ? { redirect_uri: redirectUri } : {} });
 export const connectGitHub = (code: string) => api.post('/api/github/connect', { code });
 export const disconnectGitHub = () => api.delete('/api/github/disconnect');
 export const getGitHubCommits = (hours?: number) =>
