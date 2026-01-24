@@ -5,11 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors } from '../../src/theme';
 import { Challenge } from '../../src/api/types';
-import { getChallenges } from '../../src/api/client';
+import { getPendingChallenges } from '../../src/api/client';
 import ChallengeCard from '../../src/components/ChallengeCard';
 import { useAuth } from '../../src/store/auth';
 
-export default function ActiveScreen() {
+export default function PendingChallengesScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [challenges, setChallenges] = useState<Challenge[]>([]);
@@ -18,10 +18,10 @@ export default function ActiveScreen() {
 
   const loadChallenges = useCallback(async () => {
     try {
-      const response = await getChallenges();
+      const response = await getPendingChallenges();
       setChallenges(response.data.challenges);
     } catch (error) {
-      console.error('Failed to load challenges:', error);
+      console.error('Failed to load pending challenges:', error);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -54,7 +54,15 @@ export default function ActiveScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>All Challenges</Text>
+        <View style={styles.headerContent}>
+          <Ionicons name="mail" size={24} color={colors.accent} />
+          <Text style={styles.headerTitle}>Pending Challenges</Text>
+        </View>
+        {challenges.length > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{challenges.length}</Text>
+          </View>
+        )}
       </View>
 
       <FlatList
@@ -77,10 +85,10 @@ export default function ActiveScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="flame-outline" size={64} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>No challenges yet</Text>
+            <Ionicons name="mail-open-outline" size={64} color={colors.textMuted} />
+            <Text style={styles.emptyTitle}>No pending challenges</Text>
             <Text style={styles.emptySubtitle}>
-              Start a new challenge from the dashboard!
+              When someone challenges you, it will appear here
             </Text>
           </View>
         }
@@ -100,14 +108,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   headerTitle: {
     color: colors.text,
     fontSize: 20,
+    fontWeight: '700',
+  },
+  badge: {
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  badgeText: {
+    color: colors.background,
+    fontSize: 14,
     fontWeight: '700',
   },
   listContent: {
@@ -131,5 +158,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
+    paddingHorizontal: 40,
   },
 });

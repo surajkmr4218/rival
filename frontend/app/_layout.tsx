@@ -18,13 +18,14 @@ export default function RootLayout() {
   useEffect(() => {
     if (isLoading) return;
 
-    const inAuthGroup = segments[0] === '(tabs)';
+    const inAuthGroup = segments[0] === '(tabs)' || segments[0] === 'challenge';
+    const inLoginPage = segments[0] === 'login';
 
     if (!user && inAuthGroup) {
       // Not logged in, redirect to login
       router.replace('/login');
-    } else if (user && !inAuthGroup) {
-      // Logged in, redirect to tabs
+    } else if (user && inLoginPage) {
+      // Logged in but on login page, redirect to tabs
       router.replace('/(tabs)');
     }
   }, [user, isLoading, segments]);
@@ -43,6 +44,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="login" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="challenge" />
       </Stack>
     </SafeAreaProvider>
   );

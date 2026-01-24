@@ -1,10 +1,49 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { colors } from '../../src/theme';
+import { Challenge } from '../../src/api/types';
+import { getActiveChallenges, getPendingChallenges } from '../../src/api/client';
+import ChallengeCard from '../../src/components/ChallengeCard';
+import { useAuth } from '../../src/store/auth';
 
 export default function DashboardScreen() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [activeRes, pendingRes] = await Promise.all([
+        getActiveChallenges(),
+        getPendingChallenges(),
+      ]);
+      setActiveChallenges(activeRes.data.challenges);
+      setPendingCount(pendingRes.data.challenges.length);
+    } catch (error) {
+      console.error('Failed to load challenges:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const onRefresh = () => {
+    setIsRefreshing(true);
+    loadData();
+  };
+
+  const handleChallengePress = (challenge: Challenge) => {
+    router.push(`/challenge/${challenge.id}`);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -12,17 +51,52 @@ export default function DashboardScreen() {
         <Text style={styles.logo}>RIVAL</Text>
       </View>
 
+      {/* Pending Challenges Banner */}
+      {pendingCount > 0 && (
+        <Pressable style={styles.pendingBanner} onPress={() => router.push('/challenge/pending')}>
+          <View style={styles.pendingContent}>
+            <Ionicons name="mail" size={20} color={colors.accent} />
+            <Text style={styles.pendingText}>
+              {pendingCount} pending challenge{pendingCount > 1 ? 's' : ''}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.accent} />
+        </Pressable>
+      )}
+
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <View style={styles.dot} />
           <Text style={styles.sectionTitle}>ACTIVE CHALLENGES</Text>
         </View>
 
-        <Text style={styles.empty}>No active challenges</Text>
+        {activeChallenges.length === 0 ? (
+          <Text style={styles.empty}>No active challenges</Text>
+        ) : (
+          <FlatList
+            data={activeChallenges}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={({ item }) => (
+              <ChallengeCard
+                challenge={item}
+                currentUserId={user?.id || 0}
+                onPress={() => handleChallengePress(item)}
+              />
+            )}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.accent}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+          />
+        )}
       </View>
 
       <View style={styles.footer}>
-        <Pressable style={styles.button} onPress={() => {}}>
+        <Pressable style={styles.button} onPress={() => router.push('/challenge/create')}>
           <Text style={styles.buttonText}>START NEW CHALLENGE</Text>
         </Pressable>
       </View>
@@ -45,6 +119,28 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     color: colors.accent,
     marginTop: 8,
+  },
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.card,
+    marginHorizontal: 24,
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
+  pendingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pendingText: {
+    color: colors.accent,
+    fontSize: 14,
+    fontWeight: '600',
   },
   section: {
     flex: 1,

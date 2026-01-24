@@ -28,5 +28,23 @@ export const login = (email: string, password: string) =>
 
 // User
 export const getMe = () => api.get('/api/users/me');
+export const searchUsers = (query: string) => api.post('/api/users/search', { query });
+
+// Challenges
+export const createChallenge = (data: {
+  category: 'coding' | 'screentime';
+  stake_cents: number;
+  opponent_username?: string;
+  goal_type: string;
+  goal_value: number;
+  goal_period?: string;
+}) => api.post('/api/challenges', data);
+
+export const getChallenges = () => api.get('/api/challenges');
+export const getChallenge = (id: number) => api.get(`/api/challenges/${id}`);
+export const getPendingChallenges = () => api.get('/api/challenges/pending');
+export const getActiveChallenges = () => api.get('/api/challenges/active');
+export const acceptChallenge = (id: number) => api.post(`/api/challenges/${id}/accept`);
+export const declineChallenge = (id: number) => api.post(`/api/challenges/${id}/decline`);
 
 export default api;
