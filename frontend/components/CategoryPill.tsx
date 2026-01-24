@@ -1,8 +1,8 @@
 import React from 'react';
 import { Pressable, Text, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../_theme';
-import { ChallengeCategory } from '../_api/types';
+import { colors } from '../lib/theme';
+import { ChallengeCategory } from '../lib/types';
 
 interface CategoryOption {
   id: ChallengeCategory;

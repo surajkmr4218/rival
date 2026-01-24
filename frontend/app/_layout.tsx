@@ -2,8 +2,8 @@ import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useAuth } from './_store/auth';
-import { colors } from './_theme';
+import { useAuth } from '../lib/auth';
+import { colors } from '../lib/theme';
 import { View, ActivityIndicator } from 'react-native';
 
 export default function RootLayout() {
@@ -45,6 +45,7 @@ export default function RootLayout() {
         <Stack.Screen name="login" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="challenge" />
+        <Stack.Screen name="auth" />
       </Stack>
     </SafeAreaProvider>
   );

@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../_theme';
-import { connectGitHub } from '../_api/client';
+import { colors } from '../../lib/theme';
+import { connectGitHub } from '../../lib/api';
 
 export default function GitHubCallbackScreen() {
   const router = useRouter();

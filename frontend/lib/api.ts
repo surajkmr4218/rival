@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { BACKEND_URL, API_TIMEOUT } from '../_config';
+import { BACKEND_URL, API_TIMEOUT } from './config';
 import { getToken, saveToken, deleteToken } from './storage';
 
 const api = axios.create({
@@ -46,6 +46,7 @@ export const getPendingChallenges = () => api.get('/api/challenges/pending');
 export const getActiveChallenges = () => api.get('/api/challenges/active');
 export const acceptChallenge = (id: number) => api.post(`/api/challenges/${id}/accept`);
 export const declineChallenge = (id: number) => api.post(`/api/challenges/${id}/decline`);
+export const refreshChallengeProgress = (id: number) => api.post(`/api/challenges/${id}/refresh`);
 
 // GitHub
 export const getGitHubStatus = () => api.get('/api/github/status');

@@ -3,11 +3,11 @@ import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { colors } from '../_theme';
-import { Challenge } from '../_api/types';
-import { getPendingChallenges } from '../_api/client';
-import ChallengeCard from '../_components/ChallengeCard';
-import { useAuth } from '../_store/auth';
+import { colors } from '../../lib/theme';
+import { Challenge } from '../../lib/types';
+import { getPendingChallenges } from '../../lib/api';
+import ChallengeCard from '../../components/ChallengeCard';
+import { useAuth } from '../../lib/auth';
 
 export default function PendingChallengesScreen() {
   const router = useRouter();

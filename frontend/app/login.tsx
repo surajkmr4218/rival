@@ -11,8 +11,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from './_store/auth';
-import { colors } from './_theme';
+import { useAuth } from '../lib/auth';
+import { colors } from '../lib/theme';
 
 export default function LoginScreen() {
   const { login, register, isLoading, error } = useAuth();

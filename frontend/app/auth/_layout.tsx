@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import { colors } from '../../lib/theme';
 
-export default function ChallengeLayout() {
+export default function AuthLayout() {
   return (
     <Stack
       screenOptions={{
@@ -9,9 +9,7 @@ export default function ChallengeLayout() {
         contentStyle: { backgroundColor: colors.background },
       }}
     >
-      <Stack.Screen name="create" />
-      <Stack.Screen name="[id]" />
-      <Stack.Screen name="pending" />
+      <Stack.Screen name="github" />
     </Stack>
   );
 }

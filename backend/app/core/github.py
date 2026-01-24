@@ -29,44 +29,45 @@ class GitHubClient:
     async def get_commits_count(self, username: str, since: datetime) -> int:
         """
         Count commits made by the user since a given datetime.
-        Uses the Events API to track PushEvents.
+        Uses the Search API to find commits by the user.
         """
+        # Format date for GitHub search API
+        since_str = since.strftime("%Y-%m-%dT%H:%M:%SZ")
+
         total_commits = 0
         page = 1
 
         async with httpx.AsyncClient() as client:
-            while True:
-                response = await client.get(
-                    f"{GITHUB_API_BASE}/users/{username}/events",
-                    headers=self.headers,
-                    params={"per_page": 100, "page": page},
-                )
-                response.raise_for_status()
-                events = response.json()
+            # First, get user's repos that were recently pushed to
+            repos_response = await client.get(
+                f"{GITHUB_API_BASE}/user/repos",
+                headers=self.headers,
+                params={"per_page": 100, "sort": "pushed", "direction": "desc"},
+            )
+            repos_response.raise_for_status()
+            repos = repos_response.json()
 
-                if not events:
-                    break
+            # Check commits in each repo
+            for repo in repos[:20]:  # Limit to 20 most recently pushed repos
+                repo_name = repo["full_name"]
 
-                for event in events:
-                    # Parse event timestamp
-                    event_time = datetime.fromisoformat(
-                        event["created_at"].replace("Z", "+00:00")
+                try:
+                    commits_response = await client.get(
+                        f"{GITHUB_API_BASE}/repos/{repo_name}/commits",
+                        headers=self.headers,
+                        params={
+                            "author": username,
+                            "since": since_str,
+                            "per_page": 100,
+                        },
                     )
 
-                    # Skip events before our time window
-                    if event_time < since:
-                        return total_commits
-
-                    # Count commits from PushEvents
-                    if event["type"] == "PushEvent":
-                        commits = event.get("payload", {}).get("commits", [])
+                    if commits_response.status_code == 200:
+                        commits = commits_response.json()
                         total_commits += len(commits)
-
-                page += 1
-
-                # GitHub API limits to 10 pages (300 events)
-                if page > 10:
-                    break
+                except Exception:
+                    # Skip repos we can't access
+                    continue
 
         return total_commits
 

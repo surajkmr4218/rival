@@ -144,6 +144,40 @@ async def get_commits(
         )
 
 
+@router.get("/debug")
+async def debug_github(
+    current_user: User = Depends(get_current_user),
+):
+    """Debug endpoint to check GitHub connection and recent events."""
+    if not current_user.github_access_token:
+        return {"error": "GitHub not connected"}
+
+    import httpx
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"https://api.github.com/users/{current_user.github_username}/events",
+            headers={
+                "Authorization": f"Bearer {current_user.github_access_token}",
+                "Accept": "application/vnd.github+json",
+            },
+            params={"per_page": 3},
+        )
+        events = response.json()
+
+        # Also check the scopes from the response headers
+        scopes = response.headers.get("x-oauth-scopes", "none")
+
+    # Return first raw event for debugging
+    first_event_raw = events[0] if events else None
+
+    return {
+        "github_username": current_user.github_username,
+        "token_scopes": scopes,
+        "events_count": len(events) if isinstance(events, list) else 0,
+        "first_event_raw": first_event_raw,
+    }
+
+
 @router.get("/oauth-url")
 def get_oauth_url(redirect_uri: str | None = None):
     """Get the GitHub OAuth URL for the frontend to redirect to."""

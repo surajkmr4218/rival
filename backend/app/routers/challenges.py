@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.github import GitHubClient
 from app.models.user import User
-from app.models.challenge import Challenge, ChallengeStatus
+from app.models.challenge import Challenge, ChallengeStatus, ChallengeCategory
 from app.schemas.challenge import (
     ChallengeCreate,
     ChallengeResponse,
@@ -16,6 +17,37 @@ from app.schemas.challenge import (
 )
 
 router = APIRouter(prefix="/api/challenges", tags=["challenges"])
+
+
+async def update_coding_progress(challenge: Challenge, db: Session) -> None:
+    """Fetch GitHub commits and update progress for a coding challenge."""
+    if challenge.category != ChallengeCategory.CODING:
+        return
+    if challenge.status != ChallengeStatus.ACTIVE:
+        return
+
+    # Calculate time window (from when challenge was accepted)
+    since = challenge.accepted_at.replace(tzinfo=timezone.utc) if challenge.accepted_at else datetime.now(timezone.utc)
+
+    # Update creator progress if they have GitHub connected
+    if challenge.creator.github_access_token and challenge.creator.github_username:
+        try:
+            client = GitHubClient(challenge.creator.github_access_token)
+            commits = await client.get_commits_count(challenge.creator.github_username, since)
+            challenge.creator_progress = commits
+        except Exception as e:
+            print(f"Failed to fetch commits for creator: {e}")
+
+    # Update opponent progress if they have GitHub connected
+    if challenge.opponent and challenge.opponent.github_access_token and challenge.opponent.github_username:
+        try:
+            client = GitHubClient(challenge.opponent.github_access_token)
+            commits = await client.get_commits_count(challenge.opponent.github_username, since)
+            challenge.opponent_progress = commits
+        except Exception as e:
+            print(f"Failed to fetch commits for opponent: {e}")
+
+    db.commit()
 
 
 def challenge_to_response(challenge: Challenge) -> ChallengeResponse:
@@ -148,7 +180,7 @@ def get_active_challenges(
 
 
 @router.get("/{challenge_id}", response_model=ChallengeResponse)
-def get_challenge(
+async def get_challenge(
     challenge_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -168,6 +200,36 @@ def get_challenge(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to view this challenge",
         )
+
+    # Update progress for coding challenges
+    await update_coding_progress(challenge, db)
+
+    return challenge_to_response(challenge)
+
+
+@router.post("/{challenge_id}/refresh", response_model=ChallengeResponse)
+async def refresh_challenge_progress(
+    challenge_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Manually refresh progress for a challenge (fetches latest GitHub commits)."""
+    challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
+
+    if not challenge:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Challenge not found",
+        )
+
+    if challenge.creator_id != current_user.id and challenge.opponent_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to refresh this challenge",
+        )
+
+    # Update progress
+    await update_coding_progress(challenge, db)
 
     return challenge_to_response(challenge)
 

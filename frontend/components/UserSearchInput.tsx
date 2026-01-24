@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../_theme';
-import { searchUsers } from '../_api/client';
-import { UserPublic } from '../_api/types';
+import { colors } from '../lib/theme';
+import { searchUsers } from '../lib/api';
+import { UserPublic } from '../lib/types';
 
 interface UserSearchInputProps {
   selectedUser: UserPublic | null;

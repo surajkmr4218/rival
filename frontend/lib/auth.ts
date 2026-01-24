@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import * as api from '../_api/client';
-import type { User } from '../_api/types';
+import * as api from './api';
+import type { User } from './types';
 
 interface AuthState {
   user: User | null;

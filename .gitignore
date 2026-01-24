@@ -18,6 +18,11 @@ build/
 .env.local
 *.local
 
+# Screenshots and design assets
+*.png
+*.jpg
+*.jpeg
+
 # IDE
 .idea/
 .vscode/
@@ -31,31 +36,10 @@ build/
 .LSOverride
 ._*
 
-# iOS/Xcode
-*.xcworkspace
-!*.xcworkspace/contents.xcworkspacedata
-xcuserdata/
-*.xcuserstate
-*.ipa
-*.dSYM.zip
-*.dSYM
-DerivedData/
-*.hmap
-*.moved-aside
-*.xccheckout
-*.xcscmblueprint
-Pods/
-
 # Secrets
 *.pem
 *.key
 secrets/
-
-# Screenshots and design assets
-*.png
-*.jpg
-*.jpeg
-docs/screenshots/
 
 # Claude AI workspace
 .claude/

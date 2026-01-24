@@ -4,9 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
-import { useAuth } from '../_store/auth';
-import { colors } from '../_theme';
-import { getGitHubStatus, getGitHubOAuthUrl, disconnectGitHub, connectGitHub } from '../_api/client';
+import { useAuth } from '../../lib/auth';
+import { colors } from '../../lib/theme';
+import { getGitHubStatus, getGitHubOAuthUrl, disconnectGitHub, connectGitHub } from '../../lib/api';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
