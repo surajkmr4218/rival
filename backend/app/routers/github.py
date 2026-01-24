@@ -156,7 +156,7 @@ def get_oauth_url(redirect_uri: str | None = None):
     oauth_url = (
         f"https://github.com/login/oauth/authorize"
         f"?client_id={settings.GITHUB_CLIENT_ID}"
-        f"&scope=read:user"
+        f"&scope=read:user%20repo"
     )
 
     # Use provided redirect_uri or fall back to configured one
