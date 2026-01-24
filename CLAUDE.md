@@ -43,16 +43,3 @@ rival/
 │       └── Services/
 └── CLAUDE.md
 ```
-
-## API Endpoints
-
-### Auth
-- `POST /api/auth/register` - Create new user
-- `POST /api/auth/login` - Get JWT token
-- `GET /api/users/me` - Get current user
-
-### Challenges (future)
-- `POST /api/challenges` - Create challenge
-- `GET /api/challenges` - List user's challenges
-- `POST /api/challenges/{id}/accept` - Accept challenge
-- `POST /api/challenges/{id}/verdict` - AI generates verdict

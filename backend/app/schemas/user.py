@@ -27,3 +27,8 @@ class UserResponse(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class AppleAuthRequest(BaseModel):
+    identity_token: str
+    full_name: str | None = None

@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Rival",
+    "slug": "rival",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a2f1f"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.rival.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a2f1f"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.rival.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
+  }
+}
