@@ -11,7 +11,10 @@ class Settings(BaseSettings):
     # GitHub OAuth
     GITHUB_CLIENT_ID: str = ""
     GITHUB_CLIENT_SECRET: str = ""
-    GITHUB_REDIRECT_URI: str = ""  # e.g., "https://your-app.com/github/callback" or "exp://localhost:8081/--/github/callback"
+    GITHUB_REDIRECT_URI: str = ""
+
+    # AI Referee (Gemini)
+    GEMINI_API_KEY: str = ""
 
     class Config:
         env_file = ".env"

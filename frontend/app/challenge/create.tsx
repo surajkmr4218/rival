@@ -1,29 +1,49 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  TextInput,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors } from '../../lib/theme';
-import { ChallengeCategory, UserPublic } from '../../lib/types';
+import { UserPublic } from '../../lib/types';
 import { createChallenge } from '../../lib/api';
-import CategoryPill from '../../components/CategoryPill';
 import StakeSlider from '../../components/StakeSlider';
 import UserSearchInput from '../../components/UserSearchInput';
 
+// Example prompts to help users understand what they can write
+const EXAMPLE_PROMPTS = [
+  'Make 5 meaningful commits with descriptive messages',
+  'Open 2 pull requests to any repository',
+  'Write more lines of code than your opponent',
+  'Make the most contributions to open source',
+];
+
+// Duration options in hours
+const DURATION_OPTIONS = [
+  { label: '6 hours', value: 6 },
+  { label: '12 hours', value: 12 },
+  { label: '24 hours', value: 24 },
+  { label: '48 hours', value: 48 },
+  { label: '1 week', value: 168 },
+];
+
 export default function CreateChallengeScreen() {
   const router = useRouter();
-  const [category, setCategory] = useState<ChallengeCategory | null>(null);
+  const [challengePrompt, setChallengePrompt] = useState('');
   const [stakeAmount, setStakeAmount] = useState(1000); // $10 default
   const [selectedUser, setSelectedUser] = useState<UserPublic | null>(null);
   const [isRandomMatch, setIsRandomMatch] = useState(false);
+  const [durationHours, setDurationHours] = useState(24);
   const [isLoading, setIsLoading] = useState(false);
-
-  const getGoalInfo = () => {
-    if (category === 'coding') {
-      return { type: 'commits_min', value: 5, description: 'Make 5+ commits' };
-    }
-    return { type: 'screentime_max', value: 120, description: 'Screen time < 2hrs' };
-  };
 
   const handleRandomMatch = () => {
     setSelectedUser(null);
@@ -36,8 +56,9 @@ export default function CreateChallengeScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!category) {
-      Alert.alert('Missing Category', 'Please select a challenge category.');
+    // Validate prompt
+    if (!challengePrompt.trim() || challengePrompt.trim().length < 10) {
+      Alert.alert('Invalid Challenge', 'Please describe your challenge (at least 10 characters).');
       return;
     }
 
@@ -47,16 +68,14 @@ export default function CreateChallengeScreen() {
     }
 
     setIsLoading(true);
-    const goalInfo = getGoalInfo();
 
     try {
       await createChallenge({
-        category,
+        category: 'coding', // AI referee is currently for coding challenges
         stake_cents: stakeAmount,
         opponent_username: selectedUser?.username,
-        goal_type: goalInfo.type,
-        goal_value: goalInfo.value,
-        goal_period: 'daily',
+        challenge_prompt: challengePrompt.trim(),
+        duration_hours: durationHours,
       });
 
       Alert.alert(
@@ -74,7 +93,7 @@ export default function CreateChallengeScreen() {
     }
   };
 
-  const canSubmit = category && (selectedUser || isRandomMatch);
+  const canSubmit = challengePrompt.trim().length >= 10 && (selectedUser || isRandomMatch);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -92,28 +111,84 @@ export default function CreateChallengeScreen() {
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Step 1: Category */}
+          {/* Step 1: Challenge Prompt */}
           <View style={styles.section}>
             <View style={styles.stepLabel}>
               <Text style={styles.stepNumber}>STEP 01</Text>
-              <Text style={styles.stepTitle}>SELECT CATEGORY</Text>
+              <Text style={styles.stepTitle}>DESCRIBE YOUR CHALLENGE</Text>
             </View>
-            <CategoryPill selected={category} onSelect={setCategory} />
+
+            <View style={styles.promptContainer}>
+              <TextInput
+                style={styles.promptInput}
+                placeholder="What's the challenge? Be specific..."
+                placeholderTextColor={colors.textMuted}
+                value={challengePrompt}
+                onChangeText={setChallengePrompt}
+                multiline
+                numberOfLines={3}
+                maxLength={500}
+              />
+              <Text style={styles.charCount}>{challengePrompt.length}/500</Text>
+            </View>
+
+            <Text style={styles.examplesLabel}>Examples:</Text>
+            <View style={styles.examplesContainer}>
+              {EXAMPLE_PROMPTS.map((prompt, index) => (
+                <Pressable
+                  key={index}
+                  style={styles.examplePill}
+                  onPress={() => setChallengePrompt(prompt)}
+                >
+                  <Text style={styles.exampleText}>{prompt}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
 
-          {/* Step 2: Stakes */}
+          {/* Step 2: Duration */}
           <View style={styles.section}>
             <View style={styles.stepLabel}>
               <Text style={styles.stepNumber}>STEP 02</Text>
+              <Text style={styles.stepTitle}>SET DURATION</Text>
+            </View>
+
+            <View style={styles.durationContainer}>
+              {DURATION_OPTIONS.map((option) => (
+                <Pressable
+                  key={option.value}
+                  style={[
+                    styles.durationPill,
+                    durationHours === option.value && styles.durationPillSelected,
+                  ]}
+                  onPress={() => setDurationHours(option.value)}
+                >
+                  <Text
+                    style={[
+                      styles.durationText,
+                      durationHours === option.value && styles.durationTextSelected,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          {/* Step 3: Stakes */}
+          <View style={styles.section}>
+            <View style={styles.stepLabel}>
+              <Text style={styles.stepNumber}>STEP 03</Text>
               <Text style={styles.stepTitle}>SET THE STAKES</Text>
             </View>
             <StakeSlider value={stakeAmount} onChange={setStakeAmount} />
           </View>
 
-          {/* Step 3: Challenge Rival */}
+          {/* Step 4: Challenge Rival */}
           <View style={styles.section}>
             <View style={styles.stepLabel}>
-              <Text style={styles.stepNumber}>STEP 03</Text>
+              <Text style={styles.stepNumber}>STEP 04</Text>
               <Text style={styles.stepTitle}>CHALLENGE RIVAL</Text>
             </View>
             <UserSearchInput
@@ -133,22 +208,13 @@ export default function CreateChallengeScreen() {
           <View style={styles.infoCard}>
             <View style={styles.infoHeader}>
               <Ionicons name="shield-checkmark" size={20} color={colors.accent} />
-              <Text style={styles.infoTitle}>AI REFEREE RULES</Text>
+              <Text style={styles.infoTitle}>AI REFEREE</Text>
             </View>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Automated Monitoring</Text>
-              <Text style={styles.infoText}>
-                {category === 'coding'
-                  ? 'GitHub Webhooks track your commits in real-time'
-                  : 'Screen Time APIs verify your usage'}
-              </Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Escrow Security</Text>
-              <Text style={styles.infoText}>
-                Stakes are locked until the AI referee decides a winner
-              </Text>
-            </View>
+            <Text style={styles.infoText}>
+              Our AI referee will evaluate both participants' GitHub activity based on your
+              challenge criteria. It will analyze commits, PRs, and code quality to determine
+              a fair winner.
+            </Text>
           </View>
         </ScrollView>
 
@@ -220,6 +286,73 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
+  promptContainer: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+  },
+  promptInput: {
+    color: colors.text,
+    fontSize: 16,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  charCount: {
+    color: colors.textMuted,
+    fontSize: 12,
+    textAlign: 'right',
+    marginTop: 4,
+  },
+  examplesLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  examplesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  examplePill: {
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  exampleText: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  durationContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  durationPill: {
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  durationPillSelected: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  durationText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  durationTextSelected: {
+    color: colors.background,
+  },
   randomMatchBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -245,7 +378,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   infoTitle: {
     color: colors.text,
@@ -253,19 +386,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1,
   },
-  infoItem: {
-    marginBottom: 12,
-  },
-  infoLabel: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
   infoText: {
     color: colors.textMuted,
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   footer: {
     padding: 20,

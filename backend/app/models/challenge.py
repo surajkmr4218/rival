@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -29,11 +29,20 @@ class Challenge(Base):
     category = Column(SQLEnum(ChallengeCategory), nullable=False)
     stake_cents = Column(Integer, nullable=False)
 
-    goal_type = Column(String, nullable=False)  # "commits_min", "screentime_max"
-    goal_value = Column(Integer, nullable=False)  # e.g., 5 commits, 120 minutes
-    goal_period = Column(String, default="daily")  # "daily", "weekly"
+    # AI Referee: free-form challenge prompt
+    challenge_prompt = Column(Text, nullable=True)  # e.g., "Make 3 meaningful PRs"
+    duration_hours = Column(Integer, default=24)    # Challenge duration
+
+    # Legacy fields (kept for backwards compatibility)
+    goal_type = Column(String, nullable=True)   # "commits_min", "screentime_max"
+    goal_value = Column(Integer, nullable=True) # e.g., 5 commits, 120 minutes
+    goal_period = Column(String, nullable=True) # "daily", "weekly"
 
     status = Column(SQLEnum(ChallengeStatus), default=ChallengeStatus.PENDING)
+
+    # AI Referee verdict
+    ai_verdict = Column(Text, nullable=True)           # AI's evaluation reasoning
+    ai_evaluated_at = Column(DateTime, nullable=True)  # When AI made the decision
 
     creator_progress = Column(Integer, default=0)
     opponent_progress = Column(Integer, default=0)

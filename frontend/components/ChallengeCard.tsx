@@ -22,11 +22,32 @@ export default function ChallengeCard({ challenge, currentUserId, onPress }: Cha
     return challenge.category === 'coding' ? 'logo-github' : 'phone-portrait-outline';
   };
 
-  const getGoalDescription = () => {
-    if (challenge.category === 'coding') {
+  const getChallengeDescription = () => {
+    // Use challenge_prompt if available (new AI referee system)
+    if (challenge.challenge_prompt) {
+      // Truncate long prompts for card display
+      const prompt = challenge.challenge_prompt;
+      return prompt.length > 50 ? `${prompt.substring(0, 50)}...` : prompt;
+    }
+    // Fallback to legacy goal display
+    if (challenge.goal_type === 'commits_min' && challenge.goal_value) {
       return `${challenge.goal_value}+ commits`;
     }
-    return `< ${challenge.goal_value / 60}hrs screen time`;
+    if (challenge.goal_type === 'screentime_max' && challenge.goal_value) {
+      return `< ${challenge.goal_value / 60}hrs screen time`;
+    }
+    return 'Challenge';
+  };
+
+  const getDuration = () => {
+    if (challenge.duration_hours) {
+      if (challenge.duration_hours >= 24) {
+        const days = Math.floor(challenge.duration_hours / 24);
+        return `${days} day${days > 1 ? 's' : ''}`;
+      }
+      return `${challenge.duration_hours}h`;
+    }
+    return challenge.goal_period || '';
   };
 
   const getStatusColor = () => {
@@ -47,10 +68,14 @@ export default function ChallengeCard({ challenge, currentUserId, onPress }: Cha
 
   const getStatusLabel = () => {
     if (challenge.status === 'completed') {
+      if (challenge.winner_id === null) return 'TIE';
       return challenge.winner_id === currentUserId ? 'WON' : 'LOST';
     }
     return challenge.status.toUpperCase();
   };
+
+  // Calculate progress percentage (use a reasonable default if no goal_value)
+  const maxProgress = Math.max(myProgress, theirProgress, 10);
 
   return (
     <Pressable style={styles.container} onPress={onPress}>
@@ -64,8 +89,8 @@ export default function ChallengeCard({ challenge, currentUserId, onPress }: Cha
       </View>
 
       <View style={styles.body}>
-        <Text style={styles.goal}>{getGoalDescription()}</Text>
-        <Text style={styles.period}>{challenge.goal_period}</Text>
+        <Text style={styles.goal} numberOfLines={2}>{getChallengeDescription()}</Text>
+        <Text style={styles.period}>{getDuration()}</Text>
       </View>
 
       <View style={styles.footer}>
@@ -87,7 +112,7 @@ export default function ChallengeCard({ challenge, currentUserId, onPress }: Cha
               <View
                 style={[
                   styles.progressBar,
-                  { width: `${Math.min(100, (myProgress / challenge.goal_value) * 100)}%` },
+                  { width: `${Math.min(100, (myProgress / maxProgress) * 100)}%` },
                 ]}
               />
             </View>
@@ -100,12 +125,20 @@ export default function ChallengeCard({ challenge, currentUserId, onPress }: Cha
                 style={[
                   styles.progressBar,
                   styles.progressBarOpponent,
-                  { width: `${Math.min(100, (theirProgress / challenge.goal_value) * 100)}%` },
+                  { width: `${Math.min(100, (theirProgress / maxProgress) * 100)}%` },
                 ]}
               />
             </View>
             <Text style={styles.progressValue}>{theirProgress}</Text>
           </View>
+        </View>
+      )}
+
+      {/* Show AI verdict indicator for completed challenges */}
+      {challenge.status === 'completed' && challenge.ai_verdict && (
+        <View style={styles.verdictIndicator}>
+          <Ionicons name="shield-checkmark" size={14} color={colors.accent} />
+          <Text style={styles.verdictText}>AI Referee decided</Text>
         </View>
       )}
     </Pressable>
@@ -147,13 +180,14 @@ const styles = StyleSheet.create({
   },
   goal: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
+    lineHeight: 22,
   },
   period: {
     color: colors.textMuted,
     fontSize: 12,
-    marginTop: 2,
+    marginTop: 4,
   },
   footer: {
     flexDirection: 'row',
@@ -219,5 +253,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     width: 30,
     textAlign: 'right',
+  },
+  verdictIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: 6,
+  },
+  verdictText: {
+    color: colors.textMuted,
+    fontSize: 12,
   },
 });

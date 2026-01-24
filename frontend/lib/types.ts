@@ -1,3 +1,4 @@
+// User types
 export interface User {
   id: number;
   email: string;
@@ -17,6 +18,7 @@ export interface UserPublic {
   email: string;
 }
 
+// Challenge types
 export type ChallengeCategory = 'coding' | 'screentime';
 export type ChallengeStatus = 'pending' | 'active' | 'completed' | 'declined' | 'cancelled';
 
@@ -27,13 +29,22 @@ export interface Challenge {
   category: ChallengeCategory;
   stake_cents: number;
   prize_pool_cents: number;
-  goal_type: string;
-  goal_value: number;
-  goal_period: string;
+  // AI Referee prompt
+  challenge_prompt: string | null;
+  duration_hours: number;
+  // Legacy fields (backwards compatibility)
+  goal_type: string | null;
+  goal_value: number | null;
+  goal_period: string | null;
+  // Status & progress
   status: ChallengeStatus;
   creator_progress: number;
   opponent_progress: number;
   winner_id: number | null;
+  // AI Referee verdict
+  ai_verdict: string | null;
+  ai_evaluated_at: string | null;
+  // Timestamps
   created_at: string;
   accepted_at: string | null;
   ends_at: string | null;
@@ -44,9 +55,8 @@ export interface ChallengeCreate {
   category: ChallengeCategory;
   stake_cents: number;
   opponent_username?: string;
-  goal_type: string;
-  goal_value: number;
-  goal_period?: string;
+  challenge_prompt: string;
+  duration_hours?: number;
 }
 
 export interface ChallengeList {
