@@ -43,7 +43,8 @@ export const getActiveChallenges = () => api.get('/api/challenges/active');
 export const acceptChallenge = (id: number) => api.post(`/api/challenges/${id}/accept`);
 export const declineChallenge = (id: number) => api.post(`/api/challenges/${id}/decline`);
 export const refreshChallengeProgress = (id: number) => api.post(`/api/challenges/${id}/refresh`);
-export const evaluateChallenge = (id: number) => api.post(`/api/challenges/${id}/evaluate`);
+export const evaluateChallenge = (id: number) =>
+  api.post(`/api/challenges/${id}/evaluate`, {}, { timeout: 60000 }); // 60s timeout for AI evaluation
 
 // GitHub
 export const getGitHubStatus = () => api.get('/api/github/status');

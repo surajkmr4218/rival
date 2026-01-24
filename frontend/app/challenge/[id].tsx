@@ -94,15 +94,34 @@ export default function ChallengeDetailScreen() {
           text: 'Evaluate',
           onPress: async () => {
             setIsEvaluating(true);
+            console.log('=== EVALUATE DEBUG START ===');
+            console.log('Challenge ID:', id);
+            console.log('Challenge object:', JSON.stringify(challenge, null, 2));
             try {
+              console.log('Calling evaluateChallenge...');
               const response = await evaluateChallenge(parseInt(id!));
+              console.log('Success! Response:', JSON.stringify(response.data, null, 2));
               setChallenge(response.data);
               Alert.alert('Evaluation Complete', 'The AI referee has made a decision!');
             } catch (error: any) {
-              const message = error.response?.data?.detail || 'Evaluation failed';
-              Alert.alert('Error', message);
+              console.log('=== EVALUATE ERROR ===');
+              console.log('Error object:', error);
+              console.log('Error message:', error.message);
+              console.log('Error response:', error.response);
+              console.log('Response status:', error.response?.status);
+              console.log('Response data:', JSON.stringify(error.response?.data, null, 2));
+              console.log('Response headers:', error.response?.headers);
+              console.log('Request config:', error.config);
+              console.log('=== EVALUATE ERROR END ===');
+
+              let message = error.response?.data?.detail || 'Evaluation failed';
+              if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+                message = 'Request timed out. The AI is still processing - please try again in a moment.';
+              }
+              Alert.alert('Error', `${message}\n\nStatus: ${error.response?.status || 'unknown'}\nCheck console for details.`);
             } finally {
               setIsEvaluating(false);
+              console.log('=== EVALUATE DEBUG END ===');
             }
           },
         },
