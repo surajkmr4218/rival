@@ -55,12 +55,12 @@ def create_challenge(
     current_user: User = Depends(get_current_user),
 ):
     """Create a new challenge."""
-    # Check if user has enough balance
-    if current_user.balance_cents < challenge_data.stake_cents:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Insufficient balance for this stake",
-        )
+    # TODO: Re-enable balance check when Stripe is integrated
+    # if current_user.balance_cents < challenge_data.stake_cents:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="Insufficient balance for this stake",
+    #     )
 
     # Find opponent if username provided
     opponent = None
@@ -199,16 +199,16 @@ def accept_challenge(
             detail="Challenge is not pending",
         )
 
-    # Check if opponent has enough balance
-    if current_user.balance_cents < challenge.stake_cents:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Insufficient balance for this stake",
-        )
+    # TODO: Re-enable balance check when Stripe is integrated
+    # if current_user.balance_cents < challenge.stake_cents:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="Insufficient balance for this stake",
+    #     )
 
-    # Deduct stakes from both users
-    challenge.creator.balance_cents -= challenge.stake_cents
-    current_user.balance_cents -= challenge.stake_cents
+    # TODO: Re-enable stake deduction when Stripe is integrated
+    # challenge.creator.balance_cents -= challenge.stake_cents
+    # current_user.balance_cents -= challenge.stake_cents
 
     # Update challenge status
     challenge.status = ChallengeStatus.ACTIVE

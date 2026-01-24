@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { BACKEND_URL, API_TIMEOUT } from '../config';
+import { BACKEND_URL, API_TIMEOUT } from '../_config';
 import { getToken, saveToken, deleteToken } from './storage';
 
 const api = axios.create({
@@ -46,5 +46,22 @@ export const getPendingChallenges = () => api.get('/api/challenges/pending');
 export const getActiveChallenges = () => api.get('/api/challenges/active');
 export const acceptChallenge = (id: number) => api.post(`/api/challenges/${id}/accept`);
 export const declineChallenge = (id: number) => api.post(`/api/challenges/${id}/decline`);
+
+// GitHub
+export const getGitHubStatus = () => api.get('/api/github/status');
+export const getGitHubOAuthUrl = () => api.get('/api/github/oauth-url');
+export const connectGitHub = (code: string) => api.post('/api/github/connect', { code });
+export const disconnectGitHub = () => api.delete('/api/github/disconnect');
+export const getGitHubCommits = (hours?: number) =>
+  api.get('/api/github/commits', { params: hours ? { hours } : {} });
+
+// Screen Time
+export const submitScreenTime = (data: { date: string; minutes: number; category?: string }) =>
+  api.post('/api/screentime/entry', data);
+export const getScreenTimeEntries = (days?: number) =>
+  api.get('/api/screentime/entries', { params: days ? { days } : {} });
+export const getTodayScreenTime = () => api.get('/api/screentime/today');
+export const getScreenTimeSummary = (days?: number) =>
+  api.get('/api/screentime/summary', { params: days ? { days } : {} });
 
 export default api;

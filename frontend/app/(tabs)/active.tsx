@@ -3,11 +3,11 @@ import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { colors } from '../../src/theme';
-import { Challenge } from '../../src/api/types';
-import { getChallenges } from '../../src/api/client';
-import ChallengeCard from '../../src/components/ChallengeCard';
-import { useAuth } from '../../src/store/auth';
+import { colors } from '../_theme';
+import { Challenge } from '../_api/types';
+import { getChallenges } from '../_api/client';
+import ChallengeCard from '../_components/ChallengeCard';
+import { useAuth } from '../_store/auth';
 
 export default function ActiveScreen() {
   const router = useRouter();

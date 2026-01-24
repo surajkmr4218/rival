@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme';
-import { Challenge } from '../api/types';
+import { colors } from '../_theme';
+import { Challenge } from '../_api/types';
 
 interface ChallengeCardProps {
   challenge: Challenge;

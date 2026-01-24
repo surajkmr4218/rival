@@ -3,12 +3,12 @@ import { View, Text, StyleSheet, Pressable, ScrollView, Alert, KeyboardAvoidingV
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { colors } from '../../src/theme';
-import { ChallengeCategory, UserPublic } from '../../src/api/types';
-import { createChallenge } from '../../src/api/client';
-import CategoryPill from '../../src/components/CategoryPill';
-import StakeSlider from '../../src/components/StakeSlider';
-import UserSearchInput from '../../src/components/UserSearchInput';
+import { colors } from '../_theme';
+import { ChallengeCategory, UserPublic } from '../_api/types';
+import { createChallenge } from '../_api/client';
+import CategoryPill from '../_components/CategoryPill';
+import StakeSlider from '../_components/StakeSlider';
+import UserSearchInput from '../_components/UserSearchInput';
 
 export default function CreateChallengeScreen() {
   const router = useRouter();

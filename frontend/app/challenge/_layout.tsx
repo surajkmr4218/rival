@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { colors } from '../../src/theme';
+import { colors } from '../_theme';
 
 export default function ChallengeLayout() {
   return (

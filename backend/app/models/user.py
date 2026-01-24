@@ -13,5 +13,10 @@ class User(Base):
     password_hash = Column(String, nullable=True)  # Nullable for Apple Sign In users
     apple_user_id = Column(String, unique=True, index=True, nullable=True)
     balance_cents = Column(Integer, default=0)
+
+    # GitHub integration
+    github_access_token = Column(String, nullable=True)
+    github_username = Column(String, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

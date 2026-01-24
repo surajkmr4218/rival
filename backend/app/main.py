@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.database import engine, Base
-from app.routers import auth, users, challenges
+from app.routers import auth, users, challenges, github, screentime
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -25,6 +25,8 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(challenges.router)
+app.include_router(github.router)
+app.include_router(screentime.router)
 
 
 @app.get("/health")

@@ -3,10 +3,10 @@ import { View, Text, StyleSheet, Pressable, ScrollView, Alert, ActivityIndicator
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { colors } from '../../src/theme';
-import { Challenge } from '../../src/api/types';
-import { getChallenge, acceptChallenge, declineChallenge } from '../../src/api/client';
-import { useAuth } from '../../src/store/auth';
+import { colors } from '../_theme';
+import { Challenge } from '../_api/types';
+import { getChallenge, acceptChallenge, declineChallenge } from '../_api/client';
+import { useAuth } from '../_store/auth';
 
 export default function ChallengeDetailScreen() {
   const router = useRouter();

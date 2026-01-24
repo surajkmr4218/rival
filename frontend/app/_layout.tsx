@@ -2,8 +2,8 @@ import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useAuth } from '../src/store/auth';
-import { colors } from '../src/theme';
+import { useAuth } from './_store/auth';
+import { colors } from './_theme';
 import { View, ActivityIndicator } from 'react-native';
 
 export default function RootLayout() {

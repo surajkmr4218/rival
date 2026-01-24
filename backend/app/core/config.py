@@ -8,6 +8,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     APPLE_BUNDLE_ID: str = "com.rivalhax1347.app"
 
+    # GitHub OAuth
+    GITHUB_CLIENT_ID: str = ""
+    GITHUB_CLIENT_SECRET: str = ""
+    GITHUB_REDIRECT_URI: str = ""  # e.g., "https://your-app.com/github/callback" or "exp://localhost:8081/--/github/callback"
+
     class Config:
         env_file = ".env"
 

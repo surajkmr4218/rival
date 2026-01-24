@@ -19,6 +19,8 @@ services:
     build: ./backend
     ports:
       - "8000:8000"
+    env_file:
+      - ./backend/.env
     environment:
       DATABASE_URL: postgresql://rival:rival@db:5432/rival
       DB_HOST: db

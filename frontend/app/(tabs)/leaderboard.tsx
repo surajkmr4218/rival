@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors } from '../../src/theme';
+import { colors } from '../_theme';
 
 export default function LeaderboardScreen() {
   return (

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
-import { colors } from '../theme';
+import { colors } from '../_theme';
 
 interface StakeSliderProps {
   value: number; // in cents
