@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors } from '../theme';
+import { colors } from '../../src/theme';
 
-export default function LeaderboardScreen() {
+export default function ActiveScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>Leaderboard coming soon</Text>
+      <Text style={styles.text}>No active challenges</Text>
     </View>
   );
 }

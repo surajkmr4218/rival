@@ -1,8 +1,6 @@
 // App Configuration
-// Change BACKEND_URL based on your setup:
-// - iOS Simulator: http://localhost:8000
-// - Android Emulator: http://10.0.2.2:8000
-// - Physical device: http://<your-computer-ip>:8000
+// For iOS/Android device or simulator, use your computer's IP address
+// Run: ipconfig getifaddr en0 (on Mac) to get your IP
 
-export const BACKEND_URL = 'http://localhost:8000'
+export const BACKEND_URL = 'http://172.20.99.223:8000';
 export const API_TIMEOUT = 10000;

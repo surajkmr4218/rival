@@ -11,8 +11,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../store/auth';
-import { colors } from '../theme';
+import { useAuth } from '../src/store/auth';
+import { colors } from '../src/theme';
 
 export default function LoginScreen() {
   const { login, register, isLoading, error } = useAuth();
@@ -23,7 +23,6 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // Clear form when switching modes
   const switchToSignIn = () => {
     setIsSignUp(false);
     setEmail('');
@@ -40,7 +39,6 @@ export default function LoginScreen() {
     setConfirmPassword('');
   };
 
-  // Validation
   const canSubmitSignIn = email.trim().length > 0 && password.length > 0;
   const canSubmitSignUp =
     email.trim().length > 0 &&
@@ -52,29 +50,11 @@ export default function LoginScreen() {
   const canSubmit = isSignUp ? canSubmitSignUp : canSubmitSignIn;
 
   const handleSubmit = () => {
-    console.log('handleSubmit called', { canSubmit, isLoading, isSignUp, email, username, password, confirmPassword });
-
-    if (!canSubmit) {
-      console.log('Validation failed:', {
-        emailOk: email.trim().length > 0,
-        usernameOk: username.trim().length > 0,
-        passwordOk: password.length >= 6,
-        confirmOk: confirmPassword.length > 0,
-        passwordsMatch: password === confirmPassword,
-      });
-      return;
-    }
-
-    if (isLoading) {
-      console.log('Already loading, skipping');
-      return;
-    }
+    if (!canSubmit || isLoading) return;
 
     if (isSignUp) {
-      console.log('Calling register...');
       register(email.trim(), username.trim(), password);
     } else {
-      console.log('Calling login...');
       login(email.trim(), password);
     }
   };
@@ -88,7 +68,6 @@ export default function LoginScreen() {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Logo */}
         <View style={styles.logoBox}>
           <Ionicons name="trophy" size={40} color={colors.accent} />
         </View>
@@ -98,7 +77,6 @@ export default function LoginScreen() {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        {/* Toggle */}
         <View style={styles.toggle}>
           <Pressable
             style={[styles.toggleBtn, !isSignUp && styles.toggleBtnActive]}
@@ -118,7 +96,6 @@ export default function LoginScreen() {
           </Pressable>
         </View>
 
-        {/* Form */}
         <View style={styles.form}>
           <Text style={styles.label}>Email</Text>
           <TextInput

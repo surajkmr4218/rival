@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../store/auth';
-import { colors } from '../theme';
+import { useAuth } from '../../src/store/auth';
+import { colors } from '../../src/theme';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
@@ -11,22 +11,19 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Avatar */}
       <Ionicons name="person-circle" size={80} color={colors.accent} />
 
       <Text style={styles.username}>@{user?.username}</Text>
       <Text style={styles.email}>{user?.email}</Text>
 
-      {/* Balance */}
       <View style={styles.balanceCard}>
         <Text style={styles.balanceLabel}>BALANCE</Text>
         <Text style={styles.balanceValue}>{balance}</Text>
       </View>
 
-      {/* Logout */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+      <Pressable style={styles.logoutBtn} onPress={logout}>
         <Text style={styles.logoutText}>LOGOUT</Text>
-      </TouchableOpacity>
+      </Pressable>
     </View>
   );
 }

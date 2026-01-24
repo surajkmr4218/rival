@@ -1,19 +1,17 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme';
+import { colors } from '../../src/theme';
 
 export default function DashboardScreen() {
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Ionicons name="trophy" size={32} color={colors.accent} />
         <Text style={styles.logo}>RIVAL</Text>
       </View>
 
-      {/* Active Challenges */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <View style={styles.dot} />
@@ -23,11 +21,10 @@ export default function DashboardScreen() {
         <Text style={styles.empty}>No active challenges</Text>
       </View>
 
-      {/* CTA */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.button} onPress={() => {}}>
+        <Pressable style={styles.button} onPress={() => {}}>
           <Text style={styles.buttonText}>START NEW CHALLENGE</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </SafeAreaView>
   );
