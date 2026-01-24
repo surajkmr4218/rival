@@ -17,8 +17,10 @@ export default function ChallengeDetailScreen() {
   const [isActionLoading, setIsActionLoading] = useState(false);
 
   useEffect(() => {
-    loadChallenge();
-  }, [id]);
+    if (user && id) {
+      loadChallenge();
+    }
+  }, [id, user]);
 
   const loadChallenge = async () => {
     try {

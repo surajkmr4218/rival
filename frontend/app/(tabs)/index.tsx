@@ -17,6 +17,8 @@ export default function DashboardScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const loadData = useCallback(async () => {
+    if (!user) return; // Don't fetch if not authenticated
+
     try {
       const [activeRes, pendingRes] = await Promise.all([
         getActiveChallenges(),
@@ -29,7 +31,7 @@ export default function DashboardScreen() {
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     loadData();

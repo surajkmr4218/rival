@@ -17,6 +17,8 @@ export default function ActiveScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const loadChallenges = useCallback(async () => {
+    if (!user) return; // Don't fetch if not authenticated
+
     try {
       const response = await getChallenges();
       setChallenges(response.data.challenges);
@@ -26,7 +28,7 @@ export default function ActiveScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     loadChallenges();

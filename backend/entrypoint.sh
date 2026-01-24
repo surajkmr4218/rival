@@ -1,0 +1,32 @@
+#!/bin/bash
+set -e
+
+echo "Waiting for PostgreSQL to be ready..."
+
+# Wait for database to be ready
+while ! python -c "
+import socket
+import sys
+import os
+
+host = os.environ.get('DB_HOST', 'db')
+port = int(os.environ.get('DB_PORT', 5432))
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+result = sock.connect_ex((host, port))
+sock.close()
+sys.exit(0 if result == 0 else 1)
+" 2>/dev/null; do
+    echo "PostgreSQL is unavailable - sleeping"
+    sleep 1
+done
+
+echo "PostgreSQL is up - running migrations"
+
+# Run database migrations
+alembic upgrade head
+
+echo "Migrations complete - starting server"
+
+# Start the application
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000

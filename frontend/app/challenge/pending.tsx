@@ -17,6 +17,8 @@ export default function PendingChallengesScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const loadChallenges = useCallback(async () => {
+    if (!user) return; // Don't fetch if not authenticated
+
     try {
       const response = await getPendingChallenges();
       setChallenges(response.data.challenges);
@@ -26,7 +28,7 @@ export default function PendingChallengesScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     loadChallenges();
