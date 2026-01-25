@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum, Text, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -9,6 +9,7 @@ from app.core.database import Base
 class ChallengeCategory(str, enum.Enum):
     CODING = "coding"
     SCREENTIME = "screentime"
+    STUDYING = "studying"  # Notion-based studying challenges
 
 
 class ChallengeStatus(str, enum.Enum):
@@ -43,6 +44,13 @@ class Challenge(Base):
     # AI Referee verdict
     ai_verdict = Column(Text, nullable=True)           # AI's evaluation reasoning
     ai_evaluated_at = Column(DateTime, nullable=True)  # When AI made the decision
+
+    # Notion tracking (for studying challenges)
+    creator_notion_page_id = Column(String, nullable=True)
+    opponent_notion_page_id = Column(String, nullable=True)
+    creator_notion_activity = Column(JSON, nullable=True)  # Cached activity data
+    opponent_notion_activity = Column(JSON, nullable=True)
+    last_notion_poll = Column(DateTime, nullable=True)
 
     creator_progress = Column(Integer, default=0)
     opponent_progress = Column(Integer, default=0)

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, field_validator
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
 from app.models.challenge import ChallengeCategory, ChallengeStatus
 
 
@@ -20,6 +20,8 @@ class ChallengeCreate(BaseModel):
     opponent_username: Optional[str] = None
     challenge_prompt: str  # AI-evaluated challenge description
     duration_hours: int = 24
+    # For studying challenges: creator selects their page upfront
+    creator_notion_page_id: Optional[str] = None
 
     @field_validator("challenge_prompt")
     @classmethod
@@ -50,6 +52,12 @@ class ChallengeCreate(BaseModel):
         return v
 
 
+class ChallengeAccept(BaseModel):
+    """Schema for accepting a challenge."""
+    # For studying challenges: opponent selects their page when accepting
+    opponent_notion_page_id: Optional[str] = None
+
+
 class ChallengeResponse(BaseModel):
     """Schema for challenge responses."""
     id: int
@@ -72,6 +80,11 @@ class ChallengeResponse(BaseModel):
     # AI Referee
     ai_verdict: Optional[str]
     ai_evaluated_at: Optional[datetime]
+    # Notion (for studying challenges)
+    creator_notion_page_id: Optional[str] = None
+    opponent_notion_page_id: Optional[str] = None
+    creator_notion_activity: Optional[Any] = None  # JSON object
+    opponent_notion_activity: Optional[Any] = None
     # Timestamps
     created_at: datetime
     accepted_at: Optional[datetime]

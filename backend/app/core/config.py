@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     # AI Referee (Gemini)
     GEMINI_API_KEY: str = ""
 
+    # Notion OAuth
+    NOTION_CLIENT_ID: str = ""
+    NOTION_CLIENT_SECRET: str = ""
+    NOTION_REDIRECT_URI: str = ""
+
     class Config:
         env_file = ".env"
 

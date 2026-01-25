@@ -12,14 +12,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { colors } from '../../lib/theme';
-import { Challenge } from '../../lib/types';
+import { Challenge, NotionPage, NotionActivity } from '../../lib/types';
 import {
   getChallenge,
   acceptChallenge,
   declineChallenge,
   evaluateChallenge,
+  setChallengeNotionPage,
+  pollChallengeNotion,
 } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import NotionPagePicker from '../../components/NotionPagePicker';
 
 export default function ChallengeDetailScreen() {
   const router = useRouter();
@@ -29,6 +32,10 @@ export default function ChallengeDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [showPagePicker, setShowPagePicker] = useState(false);
+  const [isPollingNotion, setIsPollingNotion] = useState(false);
+  // For accepting studying challenges - opponent must select their page
+  const [selectedAcceptPage, setSelectedAcceptPage] = useState<NotionPage | null>(null);
 
   useEffect(() => {
     if (user && id) {
@@ -49,9 +56,17 @@ export default function ChallengeDetailScreen() {
   };
 
   const handleAccept = async () => {
+    // For studying challenges, require page selection
+    if (challenge?.category === 'studying' && !selectedAcceptPage) {
+      Alert.alert('Select Study Page', 'Please select a Notion page to track for this challenge.');
+      return;
+    }
+
     setIsActionLoading(true);
     try {
-      await acceptChallenge(parseInt(id!));
+      await acceptChallenge(parseInt(id!), {
+        opponent_notion_page_id: challenge?.category === 'studying' ? selectedAcceptPage?.id : undefined,
+      });
       Alert.alert('Challenge Accepted!', 'The challenge is now active. Good luck!', [
         { text: 'OK', onPress: () => loadChallenge() },
       ]);
@@ -84,10 +99,33 @@ export default function ChallengeDetailScreen() {
     ]);
   };
 
+  const handleSelectNotionPage = async (page: NotionPage) => {
+    try {
+      const response = await setChallengeNotionPage(parseInt(id!), page.id);
+      setChallenge(response.data);
+      Alert.alert('Success', `Study page "${page.title}" selected!`);
+    } catch (error: any) {
+      Alert.alert('Error', error.response?.data?.detail || 'Failed to set study page');
+    }
+  };
+
+  const handlePollNotion = async () => {
+    setIsPollingNotion(true);
+    try {
+      const response = await pollChallengeNotion(parseInt(id!));
+      setChallenge(response.data);
+    } catch (error: any) {
+      Alert.alert('Error', error.response?.data?.detail || 'Failed to refresh activity');
+    } finally {
+      setIsPollingNotion(false);
+    }
+  };
+
   const handleEvaluate = async () => {
+    const activityType = challenge?.category === 'studying' ? 'Notion study notes' : 'GitHub activity';
     Alert.alert(
       'Request AI Evaluation',
-      'The AI referee will analyze both participants\' GitHub activity and determine a winner. This will end the challenge. Continue?',
+      `The AI referee will analyze both participants' ${activityType} and determine a winner. This will end the challenge. Continue?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -147,6 +185,27 @@ export default function ChallengeDetailScreen() {
     return challenge.opponent?.username;
   };
 
+  const renderNotionActivityRow = (
+    username: string,
+    isMe: boolean,
+    activity: NotionActivity | null
+  ) => (
+    <View style={styles.notionActivityRow}>
+      <Text style={styles.progressLabel}>
+        @{username} {isMe ? '(You)' : ''}
+      </Text>
+      {activity ? (
+        <View style={styles.notionStats}>
+          <Text style={styles.notionStatValue}>{activity.page_count} pages</Text>
+          <Text style={styles.notionStatDot}>•</Text>
+          <Text style={styles.notionStatValue}>{activity.total_blocks} blocks</Text>
+        </View>
+      ) : (
+        <Text style={styles.notionNoActivity}>No page selected</Text>
+      )}
+    </View>
+  );
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -162,11 +221,20 @@ export default function ChallengeDetailScreen() {
   }
 
   const isOpponent = challenge.opponent?.id === user?.id;
+  const isCreator = challenge.creator?.id === user?.id;
   const isPending = challenge.status === 'pending';
   const isActive = challenge.status === 'active';
   const isCompleted = challenge.status === 'completed';
+  const isStudying = challenge.category === 'studying';
   const canRespond = isOpponent && isPending;
   const canEvaluate = isActive && challenge.challenge_prompt;
+
+  // Get user's Notion page and activity
+  const myNotionPageId = isCreator ? challenge.creator_notion_page_id : challenge.opponent_notion_page_id;
+  const opponentNotionPageId = isCreator ? challenge.opponent_notion_page_id : challenge.creator_notion_page_id;
+  const myNotionActivity = isCreator ? challenge.creator_notion_activity : challenge.opponent_notion_activity;
+  const opponentNotionActivity = isCreator ? challenge.opponent_notion_activity : challenge.creator_notion_activity;
+  const needsNotionPage = isStudying && isActive && !myNotionPageId;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -182,6 +250,18 @@ export default function ChallengeDetailScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Category Badge */}
+        <View style={styles.categoryBadge}>
+          <Ionicons
+            name={isStudying ? 'book' : 'logo-github'}
+            size={14}
+            color={colors.accent}
+          />
+          <Text style={styles.categoryBadgeText}>
+            {isStudying ? 'Studying Challenge' : 'Coding Challenge'}
+          </Text>
+        </View>
+
         {/* Challenger Info */}
         <View style={styles.challengerSection}>
           <View style={styles.avatar}>
@@ -265,8 +345,59 @@ export default function ChallengeDetailScreen() {
           )}
         </View>
 
-        {/* Progress (for active challenges) */}
-        {isActive && (
+        {/* Notion Page Selection (for studying challenges) */}
+        {isStudying && isActive && (
+          <View style={styles.notionSection}>
+            <Text style={styles.sectionTitle}>YOUR STUDY PAGE</Text>
+            {myNotionPageId ? (
+              <View style={styles.notionPageSelected}>
+                <View style={styles.notionPageInfo}>
+                  <Ionicons name="document-text" size={24} color={colors.accent} />
+                  <Text style={styles.notionPageText}>Page connected</Text>
+                </View>
+                <Pressable
+                  style={styles.refreshButton}
+                  onPress={handlePollNotion}
+                  disabled={isPollingNotion}
+                >
+                  {isPollingNotion ? (
+                    <ActivityIndicator size="small" color={colors.accent} />
+                  ) : (
+                    <Ionicons name="refresh" size={20} color={colors.accent} />
+                  )}
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                style={styles.selectPageButton}
+                onPress={() => setShowPagePicker(true)}
+              >
+                <Ionicons name="add-circle" size={24} color={colors.accent} />
+                <Text style={styles.selectPageText}>Select Study Page</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
+        {/* Notion Activity (for studying challenges) */}
+        {isStudying && isActive && (myNotionActivity || opponentNotionActivity) && (
+          <View style={styles.progressCard}>
+            <Text style={styles.progressTitle}>STUDY ACTIVITY</Text>
+            {renderNotionActivityRow(
+              challenge.creator.username,
+              challenge.creator.id === user?.id,
+              challenge.creator_notion_activity
+            )}
+            {challenge.opponent && renderNotionActivityRow(
+              challenge.opponent.username,
+              challenge.opponent.id === user?.id,
+              challenge.opponent_notion_activity
+            )}
+          </View>
+        )}
+
+        {/* Progress (for coding challenges) */}
+        {!isStudying && isActive && (
           <View style={styles.progressCard}>
             <Text style={styles.progressTitle}>CURRENT PROGRESS</Text>
             <View style={styles.progressRow}>
@@ -292,8 +423,9 @@ export default function ChallengeDetailScreen() {
               <Text style={styles.infoTitle}>AI Referee</Text>
             </View>
             <Text style={styles.infoText}>
-              When the challenge ends, the AI referee will analyze both participants' GitHub
-              activity and determine a winner based on the challenge criteria.
+              {isStudying
+                ? 'When the challenge ends, the AI referee will analyze both participants\' Notion study notes and determine a winner based on quality, depth, and organization.'
+                : 'When the challenge ends, the AI referee will analyze both participants\' GitHub activity and determine a winner based on the challenge criteria.'}
             </Text>
           </View>
         )}
@@ -302,12 +434,48 @@ export default function ChallengeDetailScreen() {
       {/* Action Buttons */}
       {canRespond && (
         <View style={styles.footer}>
+          {/* Page selection for studying challenges */}
+          {isStudying && (
+            <View style={styles.acceptPageSection}>
+              <Text style={styles.acceptPageLabel}>SELECT YOUR STUDY PAGE</Text>
+              {selectedAcceptPage ? (
+                <View style={styles.selectedAcceptPage}>
+                  <View style={styles.selectedAcceptPageInfo}>
+                    <Ionicons name="document-text" size={20} color={colors.accent} />
+                    <Text style={styles.selectedAcceptPageTitle} numberOfLines={1}>
+                      {selectedAcceptPage.title || 'Untitled'}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => setShowPagePicker(true)}>
+                    <Text style={styles.changeText}>Change</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable
+                  style={styles.selectAcceptPageButton}
+                  onPress={() => setShowPagePicker(true)}
+                >
+                  <Ionicons name="add-circle" size={20} color={colors.accent} />
+                  <Text style={styles.selectAcceptPageText}>Select Notion Page</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
           <Pressable
-            style={styles.acceptButton}
+            style={[
+              styles.acceptButton,
+              isStudying && !selectedAcceptPage && styles.acceptButtonDisabled,
+            ]}
             onPress={handleAccept}
-            disabled={isActionLoading}
+            disabled={isActionLoading || (isStudying && !selectedAcceptPage)}
           >
-            <Text style={styles.acceptText}>
+            <Text
+              style={[
+                styles.acceptText,
+                isStudying && !selectedAcceptPage && styles.acceptTextDisabled,
+              ]}
+            >
               {isActionLoading ? 'PROCESSING...' : 'ACCEPT CHALLENGE'}
             </Text>
           </Pressable>
@@ -342,6 +510,22 @@ export default function ChallengeDetailScreen() {
           </Text>
         </View>
       )}
+
+      {/* Notion Page Picker Modal */}
+      <NotionPagePicker
+        visible={showPagePicker}
+        onClose={() => setShowPagePicker(false)}
+        onSelectPage={(page) => {
+          // For pending challenges (accepting), just set local state
+          if (isPending && isOpponent) {
+            setSelectedAcceptPage(page);
+          } else {
+            // For active challenges, call the API
+            handleSelectNotionPage(page);
+          }
+        }}
+        selectedPageId={isPending && isOpponent ? selectedAcceptPage?.id : myNotionPageId}
+      />
     </SafeAreaView>
   );
 }
@@ -627,5 +811,158 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
     textAlign: 'center',
+  },
+  // Notion-specific styles
+  notionSection: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  notionPageSelected: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  notionPageInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  notionPageText: {
+    color: colors.text,
+    fontSize: 14,
+  },
+  refreshButton: {
+    padding: 8,
+  },
+  selectPageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    borderStyle: 'dashed',
+    padding: 16,
+    gap: 8,
+  },
+  selectPageText: {
+    color: colors.accent,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  notionActivityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  notionStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  notionStatValue: {
+    color: colors.accent,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  notionStatDot: {
+    color: colors.textMuted,
+    fontSize: 10,
+  },
+  notionNoActivity: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 16,
+    gap: 6,
+  },
+  categoryBadgeText: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  // Accept page selection styles
+  acceptPageSection: {
+    marginBottom: 12,
+  },
+  acceptPageLabel: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  selectedAcceptPage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    padding: 12,
+  },
+  selectedAcceptPageInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  selectedAcceptPageTitle: {
+    color: colors.text,
+    fontSize: 14,
+    flex: 1,
+  },
+  changeText: {
+    color: colors.accent,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  selectAcceptPageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    borderStyle: 'dashed',
+    padding: 12,
+    gap: 8,
+  },
+  selectAcceptPageText: {
+    color: colors.accent,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  acceptButtonDisabled: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  acceptTextDisabled: {
+    color: colors.textMuted,
   },
 });

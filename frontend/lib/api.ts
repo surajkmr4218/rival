@@ -40,7 +40,8 @@ export const getChallenges = () => api.get('/api/challenges');
 export const getChallenge = (id: number) => api.get(`/api/challenges/${id}`);
 export const getPendingChallenges = () => api.get('/api/challenges/pending');
 export const getActiveChallenges = () => api.get('/api/challenges/active');
-export const acceptChallenge = (id: number) => api.post(`/api/challenges/${id}/accept`);
+export const acceptChallenge = (id: number, data?: { opponent_notion_page_id?: string }) =>
+  api.post(`/api/challenges/${id}/accept`, data || {});
 export const declineChallenge = (id: number) => api.post(`/api/challenges/${id}/decline`);
 export const refreshChallengeProgress = (id: number) => api.post(`/api/challenges/${id}/refresh`);
 export const evaluateChallenge = (id: number) =>
@@ -63,5 +64,20 @@ export const getScreenTimeEntries = (days?: number) =>
 export const getTodayScreenTime = () => api.get('/api/screentime/today');
 export const getScreenTimeSummary = (days?: number) =>
   api.get('/api/screentime/summary', { params: days ? { days } : {} });
+
+// Notion
+export const getNotionStatus = () => api.get('/api/notion/status');
+export const getNotionOAuthUrl = (redirectUri?: string) =>
+  api.get('/api/notion/oauth-url', { params: redirectUri ? { redirect_uri: redirectUri } : {} });
+export const connectNotion = (code: string) => api.post('/api/notion/connect', { code });
+export const disconnectNotion = () => api.delete('/api/notion/disconnect');
+export const searchNotionPages = (query?: string) =>
+  api.get('/api/notion/pages', { params: query ? { query } : {} });
+
+// Challenge Notion
+export const setChallengeNotionPage = (challengeId: number, pageId: string) =>
+  api.post(`/api/challenges/${challengeId}/set-notion-page`, null, { params: { page_id: pageId } });
+export const pollChallengeNotion = (challengeId: number) =>
+  api.post(`/api/challenges/${challengeId}/poll-notion`);
 
 export default api;

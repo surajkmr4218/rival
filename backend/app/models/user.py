@@ -18,5 +18,10 @@ class User(Base):
     github_access_token = Column(String, nullable=True)
     github_username = Column(String, nullable=True)
 
+    # Notion integration
+    notion_access_token = Column(String, nullable=True)
+    notion_workspace_id = Column(String, nullable=True)
+    notion_workspace_name = Column(String, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
