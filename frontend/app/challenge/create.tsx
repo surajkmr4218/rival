@@ -21,7 +21,7 @@ import UserSearchInput from '../../components/UserSearchInput';
 import NotionPagePicker from '../../components/NotionPagePicker';
 
 // Example prompts by category
-const EXAMPLE_PROMPTS: Record<ChallengeCategory, string[]> = {
+const EXAMPLE_PROMPTS: Record<'coding' | 'studying', string[]> = {
   coding: [
     'Make 5 meaningful commits with descriptive messages',
     'Open 2 pull requests to any repository',
@@ -34,7 +34,6 @@ const EXAMPLE_PROMPTS: Record<ChallengeCategory, string[]> = {
     'Write a summary of what you learned',
     'Document your learning with examples',
   ],
-  screentime: [], // Not used yet
 };
 
 // Duration options in hours
@@ -109,7 +108,7 @@ export default function CreateChallengeScreen() {
         selectedUser
           ? `Challenge sent to @${selectedUser.username}!`
           : 'Your challenge is waiting for a match!',
-        [{ text: 'OK', onPress: () => router.back() }]
+        [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
       );
     } catch (error: any) {
       const message = error.response?.data?.detail || 'Failed to create challenge';
@@ -124,7 +123,7 @@ export default function CreateChallengeScreen() {
     challengePrompt.trim().length >= 10 &&
     (selectedUser || isRandomMatch) &&
     (category !== 'studying' || selectedNotionPage !== null);
-  const currentExamples = EXAMPLE_PROMPTS[category] || [];
+  const currentExamples = EXAMPLE_PROMPTS[category];
 
   return (
     <SafeAreaView style={styles.container}>

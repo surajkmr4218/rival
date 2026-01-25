@@ -29,20 +29,11 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="active"
+        name="history"
         options={{
-          title: 'Active',
+          title: 'History',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="flame" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="leaderboard"
-        options={{
-          title: 'Leaderboard',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="trophy" size={size} color={color} />
+            <Ionicons name="time" size={size} color={color} />
           ),
         }}
       />

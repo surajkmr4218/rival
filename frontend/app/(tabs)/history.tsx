@@ -9,7 +9,7 @@ import { getChallenges } from '../../lib/api';
 import ChallengeCard from '../../components/ChallengeCard';
 import { useAuth } from '../../lib/auth';
 
-export default function ActiveScreen() {
+export default function HistoryScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [challenges, setChallenges] = useState<Challenge[]>([]);
@@ -17,11 +17,15 @@ export default function ActiveScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const loadChallenges = useCallback(async () => {
-    if (!user) return; // Don't fetch if not authenticated
+    if (!user) return;
 
     try {
       const response = await getChallenges();
-      setChallenges(response.data.challenges);
+      // Filter to only show completed challenges
+      const completed = response.data.challenges.filter(
+        (c: Challenge) => c.status === 'completed'
+      );
+      setChallenges(completed);
     } catch (error) {
       console.error('Failed to load challenges:', error);
     } finally {
@@ -56,7 +60,7 @@ export default function ActiveScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>All Challenges</Text>
+        <Text style={styles.headerTitle}>Challenge History</Text>
       </View>
 
       <FlatList
@@ -79,10 +83,10 @@ export default function ActiveScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="flame-outline" size={64} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>No challenges yet</Text>
+            <Ionicons name="time-outline" size={64} color={colors.textMuted} />
+            <Text style={styles.emptyTitle}>No completed challenges</Text>
             <Text style={styles.emptySubtitle}>
-              Start a new challenge from the dashboard!
+              Your past challenges will appear here
             </Text>
           </View>
         }

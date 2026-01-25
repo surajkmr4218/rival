@@ -1,8 +1,11 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 
 from app.core.database import get_db
+
+logger = logging.getLogger(__name__)
 from app.core.security import get_current_user
 from app.core.github import GitHubClient
 from app.core.notion import NotionClient
@@ -80,7 +83,7 @@ async def update_coding_progress(challenge: Challenge, db: Session) -> None:
             commits = await client.get_commits_count(challenge.creator.github_username, since)
             challenge.creator_progress = commits
         except Exception as e:
-            print(f"Failed to fetch commits for creator: {e}")
+            logger.warning(f"Failed to fetch commits for creator: {e}")
 
     # Update opponent progress
     if challenge.opponent and challenge.opponent.github_access_token and challenge.opponent.github_username:
@@ -89,7 +92,7 @@ async def update_coding_progress(challenge: Challenge, db: Session) -> None:
             commits = await client.get_commits_count(challenge.opponent.github_username, since)
             challenge.opponent_progress = commits
         except Exception as e:
-            print(f"Failed to fetch commits for opponent: {e}")
+            logger.warning(f"Failed to fetch commits for opponent: {e}")
 
     db.commit()
 
@@ -111,7 +114,7 @@ async def update_studying_progress(challenge: Challenge, db: Session) -> None:
             challenge.creator_notion_activity = activity
             challenge.creator_progress = activity.get("page_count", 0)
         except Exception as e:
-            print(f"Failed to fetch Notion activity for creator: {e}")
+            logger.warning(f"Failed to fetch Notion activity for creator: {e}")
 
     # Update opponent progress
     if challenge.opponent_notion_page_id and challenge.opponent and challenge.opponent.notion_access_token:
@@ -121,7 +124,7 @@ async def update_studying_progress(challenge: Challenge, db: Session) -> None:
             challenge.opponent_notion_activity = activity
             challenge.opponent_progress = activity.get("page_count", 0)
         except Exception as e:
-            print(f"Failed to fetch Notion activity for opponent: {e}")
+            logger.warning(f"Failed to fetch Notion activity for opponent: {e}")
 
     challenge.last_notion_poll = datetime.utcnow()
     db.commit()

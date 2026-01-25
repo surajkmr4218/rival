@@ -19,7 +19,7 @@ export interface UserPublic {
 }
 
 // Challenge types
-export type ChallengeCategory = 'coding' | 'screentime' | 'studying';
+export type ChallengeCategory = 'coding' | 'studying';
 export type ChallengeStatus = 'pending' | 'active' | 'completed' | 'declined' | 'cancelled';
 
 // Notion activity tracking

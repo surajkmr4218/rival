@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.database import engine, Base
-from app.routers import auth, users, challenges, github, screentime, notion
+from app.routers import auth, users, challenges, github, notion
 from app.services.notion_poller import start_polling_loop
 
 # Configure logging
@@ -54,7 +54,6 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(challenges.router)
 app.include_router(github.router)
-app.include_router(screentime.router)
 app.include_router(notion.router)
 
 

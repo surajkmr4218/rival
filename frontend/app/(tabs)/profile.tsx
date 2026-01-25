@@ -110,7 +110,7 @@ export default function ProfileScreen() {
   const handleConnectNotion = async () => {
     setIsConnectingNotion(true);
     try {
-      const redirectUri = AuthSession.makeRedirectUri({ useProxy: true });
+      const redirectUri = AuthSession.makeRedirectUri();
       console.log('=== NOTION OAUTH DEBUG ===');
       console.log('Redirect URI:', redirectUri);
       const oauthResponse = await getNotionOAuthUrl(redirectUri);

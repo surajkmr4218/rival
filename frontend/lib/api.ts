@@ -56,15 +56,6 @@ export const disconnectGitHub = () => api.delete('/api/github/disconnect');
 export const getGitHubCommits = (hours?: number) =>
   api.get('/api/github/commits', { params: hours ? { hours } : {} });
 
-// Screen Time
-export const submitScreenTime = (data: { date: string; minutes: number; category?: string }) =>
-  api.post('/api/screentime/entry', data);
-export const getScreenTimeEntries = (days?: number) =>
-  api.get('/api/screentime/entries', { params: days ? { days } : {} });
-export const getTodayScreenTime = () => api.get('/api/screentime/today');
-export const getScreenTimeSummary = (days?: number) =>
-  api.get('/api/screentime/summary', { params: days ? { days } : {} });
-
 // Notion
 export const getNotionStatus = () => api.get('/api/notion/status');
 export const getNotionOAuthUrl = (redirectUri?: string) =>

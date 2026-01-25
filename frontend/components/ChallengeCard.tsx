@@ -19,7 +19,9 @@ export default function ChallengeCard({ challenge, currentUserId, onPress }: Cha
   const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
   const getCategoryIcon = (): keyof typeof Ionicons.glyphMap => {
-    return challenge.category === 'coding' ? 'logo-github' : 'phone-portrait-outline';
+    if (challenge.category === 'coding') return 'logo-github';
+    if (challenge.category === 'studying') return 'book';
+    return 'phone-portrait-outline';
   };
 
   const getChallengeDescription = () => {
