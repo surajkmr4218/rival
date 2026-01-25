@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../../lib/theme';
 import { Challenge } from '../../lib/types';
 import { getChallenges } from '../../lib/api';
@@ -34,9 +35,12 @@ export default function HistoryScreen() {
     }
   }, [user]);
 
-  useEffect(() => {
-    loadChallenges();
-  }, [loadChallenges]);
+  // Refresh data whenever screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadChallenges();
+    }, [loadChallenges])
+  );
 
   const onRefresh = () => {
     setIsRefreshing(true);
@@ -59,10 +63,6 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Challenge History</Text>
-      </View>
-
       <FlatList
         data={challenges}
         keyExtractor={(item) => item.id.toString()}
@@ -104,17 +104,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  headerTitle: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: '700',
   },
   listContent: {
     padding: 20,

@@ -7,6 +7,14 @@ export interface User {
   created_at: string;
 }
 
+export interface UserStats {
+  challenges_won: number;
+  challenges_lost: number;
+  total_earnings_cents: number;
+  current_streak: number;
+  win_rate: number;
+}
+
 export interface AuthToken {
   access_token: string;
   token_type: string;
@@ -106,3 +114,20 @@ export interface NotionStatus {
   workspace_name: string | null;
   workspace_id: string | null;
 }
+
+// Balance History types
+export interface BalanceDataPoint {
+  timestamp: string;
+  balance_cents: number;
+}
+
+export interface BalanceHistoryResponse {
+  period: string;
+  data_points: BalanceDataPoint[];
+  start_balance_cents: number;
+  current_balance_cents: number;
+  change_cents: number;
+  change_percent: number;
+}
+
+export type BalanceHistoryPeriod = '1D' | '1W' | '1M' | '6M' | '1Y' | 'ALL';

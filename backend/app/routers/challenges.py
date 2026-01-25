@@ -1,3 +1,4 @@
+import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -12,6 +13,7 @@ from app.core.notion import NotionClient
 from app.core.gemini import get_referee
 from app.models.user import User
 from app.models.challenge import Challenge, ChallengeStatus, ChallengeCategory
+from app.models.balance_history import BalanceHistory
 from app.schemas.challenge import (
     ChallengeCreate,
     ChallengeAccept,
@@ -141,6 +143,13 @@ def create_challenge(
     current_user: User = Depends(get_current_user),
 ):
     """Create a new challenge with AI-evaluated prompt."""
+    # Validate user has sufficient balance for the stake
+    if current_user.balance_cents < challenge_data.stake_cents:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Insufficient balance. You have ${current_user.balance_cents / 100:.2f} but need ${challenge_data.stake_cents / 100:.2f}",
+        )
+
     # Validate studying challenges require Notion connection and page selection
     if challenge_data.category == ChallengeCategory.STUDYING:
         if not current_user.notion_access_token:
@@ -171,6 +180,9 @@ def create_challenge(
                 detail="Cannot challenge yourself",
             )
 
+    # Deduct stake from creator's balance
+    current_user.balance_cents -= challenge_data.stake_cents
+
     # Create challenge
     challenge = Challenge(
         creator_id=current_user.id,
@@ -185,6 +197,18 @@ def create_challenge(
     )
 
     db.add(challenge)
+    db.flush()  # Get challenge ID before creating balance record
+
+    # Record stake deduction in balance history
+    stake_record = BalanceHistory(
+        user_id=current_user.id,
+        balance_cents=current_user.balance_cents,
+        change_cents=-challenge_data.stake_cents,
+        event_type="stake",
+        challenge_id=challenge.id,
+    )
+    db.add(stake_record)
+
     db.commit()
     db.refresh(challenge)
 
@@ -293,6 +317,13 @@ def accept_challenge(
     if challenge.status != ChallengeStatus.PENDING:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Challenge is not pending")
 
+    # Validate user has sufficient balance for the stake
+    if current_user.balance_cents < challenge.stake_cents:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Insufficient balance. You have ${current_user.balance_cents / 100:.2f} but need ${challenge.stake_cents / 100:.2f}",
+        )
+
     # Validate studying challenges require Notion connection and page selection
     if challenge.category == ChallengeCategory.STUDYING:
         if not current_user.notion_access_token:
@@ -306,6 +337,19 @@ def accept_challenge(
                 detail="Select a study page to accept this challenge",
             )
         challenge.opponent_notion_page_id = accept_data.opponent_notion_page_id
+
+    # Deduct stake from opponent's balance
+    current_user.balance_cents -= challenge.stake_cents
+
+    # Record stake deduction in balance history
+    stake_record = BalanceHistory(
+        user_id=current_user.id,
+        balance_cents=current_user.balance_cents,
+        change_cents=-challenge.stake_cents,
+        event_type="stake",
+        challenge_id=challenge.id,
+    )
+    db.add(stake_record)
 
     # Activate challenge
     challenge.status = ChallengeStatus.ACTIVE
@@ -336,7 +380,59 @@ def decline_challenge(
     if challenge.status != ChallengeStatus.PENDING:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Challenge is not pending")
 
+    # Refund the stake to the creator
+    creator = challenge.creator
+    creator.balance_cents += challenge.stake_cents
+
+    # Record refund in balance history
+    refund_record = BalanceHistory(
+        user_id=creator.id,
+        balance_cents=creator.balance_cents,
+        change_cents=challenge.stake_cents,
+        event_type="stake_refund",
+        challenge_id=challenge.id,
+    )
+    db.add(refund_record)
+
     challenge.status = ChallengeStatus.DECLINED
+    db.commit()
+    db.refresh(challenge)
+
+    return challenge_to_response(challenge)
+
+
+@router.post("/{challenge_id}/cancel", response_model=ChallengeResponse)
+def cancel_challenge(
+    challenge_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cancel a pending challenge (creator only)."""
+    challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
+
+    if not challenge:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Challenge not found")
+
+    if challenge.creator_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the creator can cancel this challenge")
+
+    if challenge.status != ChallengeStatus.PENDING:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only pending challenges can be cancelled")
+
+    # Refund the stake to the creator
+    current_user.balance_cents += challenge.stake_cents
+
+    # Record refund in balance history
+    refund_record = BalanceHistory(
+        user_id=current_user.id,
+        balance_cents=current_user.balance_cents,
+        change_cents=challenge.stake_cents,
+        event_type="stake_refund",
+        challenge_id=challenge.id,
+    )
+    db.add(refund_record)
+
+    challenge.status = ChallengeStatus.CANCELLED
     db.commit()
     db.refresh(challenge)
 
@@ -475,18 +571,81 @@ async def evaluate_challenge(
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="AI evaluation not available for this challenge type")
 
-    # Update challenge with verdict
-    challenge.ai_verdict = verdict.get("verdict", "Evaluation completed.")
+    # Update challenge with personalized verdicts (stored as JSON)
+    # Each user gets their own verdict that speaks directly to them
+    personalized_verdicts = {
+        "creator_verdict": verdict.get("creator_verdict", verdict.get("verdict", "Evaluation completed.")),
+        "opponent_verdict": verdict.get("opponent_verdict", verdict.get("verdict", "Evaluation completed.")),
+        "creator_summary": verdict.get("creator_summary", ""),
+        "opponent_summary": verdict.get("opponent_summary", ""),
+    }
+    challenge.ai_verdict = json.dumps(personalized_verdicts)
     challenge.ai_evaluated_at = datetime.utcnow()
 
-    # Determine winner
+    # Determine winner and update balances
+    # Note: Both participants already had their stakes deducted when creating/accepting
     winner_result = verdict.get("winner", "").lower()
+    stake = challenge.stake_cents
+    prize_pool = stake * 2  # Both stakes combined
+
     if winner_result == "creator":
         challenge.winner_id = challenge.creator_id
+        winner = challenge.creator
+        loser = challenge.opponent
     elif winner_result == "opponent":
         challenge.winner_id = challenge.opponent_id
+        winner = challenge.opponent
+        loser = challenge.creator
     else:
         challenge.winner_id = None  # Tie
+        winner = None
+        loser = None
+
+    # Update balances based on outcome
+    if winner and loser:
+        # Winner gets the entire prize pool (their stake back + opponent's stake)
+        winner.balance_cents += prize_pool
+        # Record winner's balance change
+        winner_record = BalanceHistory(
+            user_id=winner.id,
+            balance_cents=winner.balance_cents,
+            change_cents=prize_pool,
+            event_type="challenge_win",
+            challenge_id=challenge.id,
+        )
+        db.add(winner_record)
+
+        # Loser already lost their stake when accepting - just record for history
+        # (No balance change needed - stake was already deducted)
+        loser_record = BalanceHistory(
+            user_id=loser.id,
+            balance_cents=loser.balance_cents,
+            change_cents=0,  # No change - already deducted
+            event_type="challenge_loss",
+            challenge_id=challenge.id,
+        )
+        db.add(loser_record)
+    else:
+        # Tie - refund both participants their stakes
+        challenge.creator.balance_cents += stake
+        creator_refund = BalanceHistory(
+            user_id=challenge.creator.id,
+            balance_cents=challenge.creator.balance_cents,
+            change_cents=stake,
+            event_type="stake_refund",
+            challenge_id=challenge.id,
+        )
+        db.add(creator_refund)
+
+        challenge.opponent.balance_cents += stake
+        opponent_refund = BalanceHistory(
+            user_id=challenge.opponent.id,
+            balance_cents=challenge.opponent.balance_cents,
+            change_cents=stake,
+            event_type="stake_refund",
+            challenge_id=challenge.id,
+        )
+        db.add(opponent_refund)
 
     # Mark challenge as completed
     challenge.status = ChallengeStatus.COMPLETED

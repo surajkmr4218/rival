@@ -7,6 +7,11 @@ from app.schemas.challenge import (
     UserSearchRequest,
     UserSearchResponse,
 )
+from app.schemas.balance_history import (
+    BalanceDataPoint,
+    BalanceHistoryResponse,
+    BalanceHistoryRecord,
+)
 
 __all__ = [
     "UserCreate",
@@ -19,4 +24,7 @@ __all__ = [
     "UserPublic",
     "UserSearchRequest",
     "UserSearchResponse",
+    "BalanceDataPoint",
+    "BalanceHistoryResponse",
+    "BalanceHistoryRecord",
 ]

@@ -29,6 +29,10 @@ export const login = (email: string, password: string) =>
 // User
 export const getMe = () => api.get('/api/users/me');
 export const searchUsers = (query: string) => api.post('/api/users/search', { query });
+export const getUserStats = () => api.get('/api/users/me/stats');
+export const addBalance = (amountCents: number) => api.post('/api/users/me/balance', { amount_cents: amountCents });
+export const getBalanceHistory = (period: string = '1W') =>
+  api.get('/api/users/me/balance-history', { params: { period } });
 
 // Challenges
 import type { ChallengeCreate } from './types';
@@ -43,6 +47,7 @@ export const getActiveChallenges = () => api.get('/api/challenges/active');
 export const acceptChallenge = (id: number, data?: { opponent_notion_page_id?: string }) =>
   api.post(`/api/challenges/${id}/accept`, data || {});
 export const declineChallenge = (id: number) => api.post(`/api/challenges/${id}/decline`);
+export const cancelChallenge = (id: number) => api.post(`/api/challenges/${id}/cancel`);
 export const refreshChallengeProgress = (id: number) => api.post(`/api/challenges/${id}/refresh`);
 export const evaluateChallenge = (id: number) =>
   api.post(`/api/challenges/${id}/evaluate`, {}, { timeout: 60000 }); // 60s timeout for AI evaluation

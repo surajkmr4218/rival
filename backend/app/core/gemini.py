@@ -13,19 +13,33 @@ from app.core.config import settings
 
 # Base rules shared by all referee prompts (DRY)
 _BASE_RULES = """RULES:
-1. Be fair and objective - no bias toward either participant
-2. Focus on the SPECIFIC challenge criteria, not general productivity
-3. Quality matters more than quantity unless quantity is explicitly requested
-4. Provide clear, concise reasoning for your decision
-5. If it's genuinely too close to call, declare a tie
+1. TOPIC RELEVANCE IS MANDATORY - Content MUST be relevant to the challenge prompt.
+   Off-topic content (even if high quality/volume) should be scored less.
+   Example: If challenge is "study for math exam", notes about cooking recipes = 0 points.
+2. Be fair and objective - no bias toward either participant
+3. Focus on the SPECIFIC challenge criteria, not general productivity
+4. Quality matters more than quantity unless quantity is explicitly requested
+5. Provide clear, concise reasoning for your decision
+6. If it's genuinely too close to call, declare a tie
 
 OUTPUT FORMAT (JSON):
 {
     "winner": "creator" | "opponent" | "tie",
-    "verdict": "2-3 sentence explanation of your decision",
-    "creator_summary": "Brief summary of creator's relevant activity",
-    "opponent_summary": "Brief summary of opponent's relevant activity"
-}"""
+    "creator_verdict": "2-3 sentences speaking directly to the creator using 'you'. Explain what they did well or poorly and why they won/lost.",
+    "opponent_verdict": "2-3 sentences speaking directly to the opponent using 'you'. Explain what they did well or poorly and why they won/lost.",
+    "creator_summary": "Brief factual summary of creator's relevant activity",
+    "opponent_summary": "Brief factual summary of opponent's relevant activity"
+}
+
+IMPORTANT FOR VERDICTS:
+- Each verdict should speak directly to that user in second person ("You...")
+- Be encouraging but honest
+- If a user had off-topic content, explicitly mention this
+- Examples:
+  - Winner: "You won! Your detailed implementation notes on the API design clearly demonstrated deep understanding..."
+  - Loser: "You lost this challenge. While you created content, it was about trip planning which wasn't relevant to the coding challenge..."
+  - Tie: "This challenge ended in a tie. Both you and your opponent produced similar quality work..."
+"""
 
 # GitHub coding challenges
 CODING_REFEREE_PROMPT = f"""You are an impartial AI referee for Rival, a productivity challenge app.
@@ -39,12 +53,20 @@ STUDYING_REFEREE_PROMPT = f"""You are an impartial AI referee for Rival, a produ
 
 Your job is to evaluate Notion study notes and determine who studied more effectively.
 
-EVALUATION CRITERIA:
-1. Depth of content - Are concepts explained thoroughly?
-2. Organization - Are notes well-structured with headings, lists, and sections?
-3. Volume - How much content was created/edited during the challenge period?
-4. Quality - Are there examples, references, or detailed explanations?
-5. Consistency - Was work spread across the duration or crammed?
+CRITICAL FIRST CHECK - TOPIC RELEVANCE:
+Before evaluating quality or volume, you MUST verify the content matches the challenge criteria.
+- If a user's notes are about a DIFFERENT TOPIC than the challenge specifies, they get ZERO credit.
+- Example: Challenge is "write implementation plan for coding project" but user wrote travel itinerary = ZERO points
+- Example: Challenge is "study machine learning" but user wrote meeting notes = ZERO points
+A participant with minimal relevant content beats a participant with extensive off-topic content.
+
+EVALUATION CRITERIA (only for relevant content):
+1. Topic relevance - Does the content match what the challenge asked for? (MANDATORY)
+2. Depth of content - Are concepts explained thoroughly?
+3. Organization - Are notes well-structured with headings, lists, and sections?
+4. Volume - How much relevant content was created/edited during the challenge period?
+5. Quality - Are there examples, references, or detailed explanations?
+6. Consistency - Was work spread across the duration or crammed?
 
 {_BASE_RULES}"""
 

@@ -36,12 +36,12 @@ const EXAMPLE_PROMPTS: Record<'coding' | 'studying', string[]> = {
   ],
 };
 
-// Duration options in hours
-const DURATION_OPTIONS = [
-  { label: '6 hours', value: 6 },
-  { label: '12 hours', value: 12 },
-  { label: '24 hours', value: 24 },
-  { label: '48 hours', value: 48 },
+// Duration presets in hours
+const DURATION_PRESETS = [
+  { label: '6h', value: 6 },
+  { label: '12h', value: 12 },
+  { label: '24h', value: 24 },
+  { label: '48h', value: 48 },
   { label: '1 week', value: 168 },
 ];
 
@@ -51,8 +51,10 @@ export default function CreateChallengeScreen() {
   const [challengePrompt, setChallengePrompt] = useState('');
   const [stakeAmount, setStakeAmount] = useState(1000); // $10 default
   const [selectedUser, setSelectedUser] = useState<UserPublic | null>(null);
-  const [isRandomMatch, setIsRandomMatch] = useState(false);
   const [durationHours, setDurationHours] = useState(24);
+  const [isCustomDuration, setIsCustomDuration] = useState(false);
+  const [customHours, setCustomHours] = useState('');
+  const [customMinutes, setCustomMinutes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   // Notion page selection for studying challenges
   const [selectedNotionPage, setSelectedNotionPage] = useState<NotionPage | null>(null);
@@ -64,14 +66,28 @@ export default function CreateChallengeScreen() {
     setSelectedNotionPage(null); // Clear notion page when switching
   };
 
-  const handleRandomMatch = () => {
-    setSelectedUser(null);
-    setIsRandomMatch(true);
-  };
-
   const handleSelectUser = (user: UserPublic | null) => {
     setSelectedUser(user);
-    setIsRandomMatch(false);
+  };
+
+  const handleDurationPreset = (hours: number) => {
+    setDurationHours(hours);
+    setIsCustomDuration(false);
+    setCustomHours('');
+    setCustomMinutes('');
+  };
+
+  const handleCustomDuration = () => {
+    setIsCustomDuration(true);
+  };
+
+  const getEffectiveDuration = (): number => {
+    if (isCustomDuration) {
+      const hours = parseInt(customHours) || 0;
+      const minutes = parseInt(customMinutes) || 0;
+      return hours + minutes / 60;
+    }
+    return durationHours;
   };
 
   const handleSubmit = async () => {
@@ -80,8 +96,14 @@ export default function CreateChallengeScreen() {
       return;
     }
 
-    if (!selectedUser && !isRandomMatch) {
-      Alert.alert('Missing Opponent', 'Please select an opponent or choose random match.');
+    if (!selectedUser) {
+      Alert.alert('Missing Opponent', 'Please select an opponent.');
+      return;
+    }
+
+    const effectiveDuration = getEffectiveDuration();
+    if (effectiveDuration < 0.5) {
+      Alert.alert('Invalid Duration', 'Challenge must be at least 30 minutes.');
       return;
     }
 
@@ -99,7 +121,7 @@ export default function CreateChallengeScreen() {
         stake_cents: stakeAmount,
         opponent_username: selectedUser?.username,
         challenge_prompt: challengePrompt.trim(),
-        duration_hours: durationHours,
+        duration_hours: Math.round(getEffectiveDuration() * 100) / 100,
         creator_notion_page_id: category === 'studying' ? selectedNotionPage?.id : undefined,
       });
 
@@ -118,10 +140,12 @@ export default function CreateChallengeScreen() {
     }
   };
 
-  // For studying challenges, also require a Notion page selection
+  // Validation
+  const effectiveDuration = getEffectiveDuration();
   const canSubmit =
     challengePrompt.trim().length >= 10 &&
-    (selectedUser || isRandomMatch) &&
+    selectedUser !== null &&
+    effectiveDuration >= 0.5 &&
     (category !== 'studying' || selectedNotionPage !== null);
   const currentExamples = EXAMPLE_PROMPTS[category];
 
@@ -129,7 +153,7 @@ export default function CreateChallengeScreen() {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {/* Header with Category Toggle */}
         <View style={styles.header}>
@@ -161,7 +185,11 @@ export default function CreateChallengeScreen() {
           </View>
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.content}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* Category Label */}
           <View style={styles.categoryLabel}>
             <Ionicons
@@ -264,26 +292,71 @@ export default function CreateChallengeScreen() {
             </View>
 
             <View style={styles.durationContainer}>
-              {DURATION_OPTIONS.map((option) => (
+              {DURATION_PRESETS.map((option) => (
                 <Pressable
                   key={option.value}
                   style={[
                     styles.durationPill,
-                    durationHours === option.value && styles.durationPillSelected,
+                    durationHours === option.value && !isCustomDuration && styles.durationPillSelected,
                   ]}
-                  onPress={() => setDurationHours(option.value)}
+                  onPress={() => handleDurationPreset(option.value)}
                 >
                   <Text
                     style={[
                       styles.durationText,
-                      durationHours === option.value && styles.durationTextSelected,
+                      durationHours === option.value && !isCustomDuration && styles.durationTextSelected,
                     ]}
                   >
                     {option.label}
                   </Text>
                 </Pressable>
               ))}
+              <Pressable
+                style={[
+                  styles.durationPill,
+                  isCustomDuration && styles.durationPillSelected,
+                ]}
+                onPress={handleCustomDuration}
+              >
+                <Text
+                  style={[
+                    styles.durationText,
+                    isCustomDuration && styles.durationTextSelected,
+                  ]}
+                >
+                  Custom
+                </Text>
+              </Pressable>
             </View>
+
+            {isCustomDuration && (
+              <View style={styles.customDurationContainer}>
+                <View style={styles.customDurationInput}>
+                  <TextInput
+                    style={styles.durationInput}
+                    placeholder="0"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="numeric"
+                    value={customHours}
+                    onChangeText={setCustomHours}
+                    maxLength={3}
+                  />
+                  <Text style={styles.durationUnit}>hrs</Text>
+                </View>
+                <View style={styles.customDurationInput}>
+                  <TextInput
+                    style={styles.durationInput}
+                    placeholder="0"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="numeric"
+                    value={customMinutes}
+                    onChangeText={setCustomMinutes}
+                    maxLength={2}
+                  />
+                  <Text style={styles.durationUnit}>min</Text>
+                </View>
+              </View>
+            )}
           </View>
 
           {/* Step 4: Stakes (Step 3 for coding) */}
@@ -304,14 +377,7 @@ export default function CreateChallengeScreen() {
             <UserSearchInput
               selectedUser={selectedUser}
               onSelectUser={handleSelectUser}
-              onRandomMatch={handleRandomMatch}
             />
-            {isRandomMatch && (
-              <View style={styles.randomMatchBadge}>
-                <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
-                <Text style={styles.randomMatchText}>Random match selected</Text>
-              </View>
-            )}
           </View>
 
           {/* AI Referee Info */}
@@ -502,17 +568,33 @@ const styles = StyleSheet.create({
   durationTextSelected: {
     color: colors.background,
   },
-  randomMatchBadge: {
+  customDurationContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  customDurationInput: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-    gap: 6,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    paddingHorizontal: 16,
   },
-  randomMatchText: {
-    color: colors.accent,
+  durationInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 24,
+    fontWeight: '700',
+    paddingVertical: 12,
+    textAlign: 'center',
+  },
+  durationUnit: {
+    color: colors.textMuted,
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   infoCard: {
     backgroundColor: colors.card,

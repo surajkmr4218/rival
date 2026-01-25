@@ -8,10 +8,9 @@ import { UserPublic } from '../lib/types';
 interface UserSearchInputProps {
   selectedUser: UserPublic | null;
   onSelectUser: (user: UserPublic | null) => void;
-  onRandomMatch: () => void;
 }
 
-export default function UserSearchInput({ selectedUser, onSelectUser, onRandomMatch }: UserSearchInputProps) {
+export default function UserSearchInput({ selectedUser, onSelectUser }: UserSearchInputProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UserPublic[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -73,7 +72,7 @@ export default function UserSearchInput({ selectedUser, onSelectUser, onRandomMa
         <Ionicons name="search" size={20} color={colors.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Invite friend by username..."
+          placeholder="Search opponent by username..."
           placeholderTextColor={colors.textMuted}
           value={query}
           onChangeText={setQuery}
@@ -98,16 +97,9 @@ export default function UserSearchInput({ selectedUser, onSelectUser, onRandomMa
         </View>
       )}
 
-      <View style={styles.orContainer}>
-        <View style={styles.divider} />
-        <Text style={styles.orText}>OR</Text>
-        <View style={styles.divider} />
-      </View>
-
-      <Pressable style={styles.randomButton} onPress={onRandomMatch}>
-        <Ionicons name="shuffle" size={20} color={colors.accent} />
-        <Text style={styles.randomText}>Random Match</Text>
-      </Pressable>
+      {query.length >= 2 && !isLoading && results.length === 0 && (
+        <Text style={styles.noResults}>No users found</Text>
+      )}
     </View>
   );
 }
@@ -153,6 +145,12 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
   },
+  noResults: {
+    color: colors.textMuted,
+    fontSize: 14,
+    textAlign: 'center',
+    padding: 12,
+  },
   selectedContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -175,36 +173,5 @@ const styles = StyleSheet.create({
   },
   clearButton: {
     padding: 4,
-  },
-  orContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 8,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  orText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    marginHorizontal: 12,
-  },
-  randomButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    gap: 8,
-  },
-  randomText: {
-    color: colors.accent,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

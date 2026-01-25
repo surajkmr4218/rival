@@ -17,12 +17,14 @@ import {
   getChallenge,
   acceptChallenge,
   declineChallenge,
+  cancelChallenge,
   evaluateChallenge,
   setChallengeNotionPage,
   pollChallengeNotion,
 } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import NotionPagePicker from '../../components/NotionPagePicker';
+import ChallengeResultPopup from '../../components/ChallengeResultPopup';
 
 export default function ChallengeDetailScreen() {
   const router = useRouter();
@@ -36,6 +38,9 @@ export default function ChallengeDetailScreen() {
   const [isPollingNotion, setIsPollingNotion] = useState(false);
   // For accepting studying challenges - opponent must select their page
   const [selectedAcceptPage, setSelectedAcceptPage] = useState<NotionPage | null>(null);
+  // Result popup
+  const [showResultPopup, setShowResultPopup] = useState(false);
+  const [resultIsWin, setResultIsWin] = useState(false);
 
   useEffect(() => {
     if (user && id) {
@@ -99,6 +104,32 @@ export default function ChallengeDetailScreen() {
     ]);
   };
 
+  const handleCancel = async () => {
+    Alert.alert(
+      'Cancel Challenge',
+      'Are you sure you want to cancel this challenge? Your stake will be refunded.',
+      [
+        { text: 'Keep Challenge', style: 'cancel' },
+        {
+          text: 'Cancel Challenge',
+          style: 'destructive',
+          onPress: async () => {
+            setIsActionLoading(true);
+            try {
+              await cancelChallenge(parseInt(id!));
+              Alert.alert('Challenge Cancelled', 'Your stake has been refunded.');
+              router.back();
+            } catch (error: any) {
+              Alert.alert('Error', error.response?.data?.detail || 'Failed to cancel challenge');
+            } finally {
+              setIsActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleSelectNotionPage = async (page: NotionPage) => {
     try {
       const response = await setChallengeNotionPage(parseInt(id!), page.id);
@@ -140,7 +171,11 @@ export default function ChallengeDetailScreen() {
               const response = await evaluateChallenge(parseInt(id!));
               console.log('Success! Response:', JSON.stringify(response.data, null, 2));
               setChallenge(response.data);
-              Alert.alert('Evaluation Complete', 'The AI referee has made a decision!');
+
+              // Show result popup
+              const isWin = response.data.winner_id === user?.id;
+              setResultIsWin(isWin);
+              setShowResultPopup(true);
             } catch (error: any) {
               console.log('=== EVALUATE ERROR ===');
               console.log('Error object:', error);
@@ -185,6 +220,89 @@ export default function ChallengeDetailScreen() {
     return challenge.opponent?.username;
   };
 
+  const didUserWin = () => {
+    return challenge?.winner_id === user?.id;
+  };
+
+  const getOpponentUsername = () => {
+    if (!challenge) return '';
+    if (challenge.creator.id === user?.id) {
+      return challenge.opponent?.username || 'Opponent';
+    }
+    return challenge.creator.username;
+  };
+
+  // Parse personalized verdict from JSON and extract the right message for the current user
+  const getPersonalizedVerdict = (): string | null => {
+    if (!challenge?.ai_verdict) return null;
+
+    const rawVerdict = challenge.ai_verdict;
+    const isCreator = challenge.creator.id === user?.id;
+    const verdictKey = isCreator ? 'creator_verdict' : 'opponent_verdict';
+
+    // Debug logging
+    console.log('=== VERDICT DEBUG ===');
+    console.log('rawVerdict type:', typeof rawVerdict);
+    console.log('rawVerdict value:', rawVerdict);
+    console.log('isCreator:', isCreator);
+    console.log('verdictKey:', verdictKey);
+
+    // Helper to extract verdict from an object
+    const extractFromObject = (obj: any): string | null => {
+      if (!obj || typeof obj !== 'object') {
+        console.log('extractFromObject: obj is not an object', typeof obj);
+        return null;
+      }
+      const verdict = obj[verdictKey] || obj.verdict;
+      console.log('extractFromObject: found verdict:', verdict);
+      return verdict && typeof verdict === 'string' ? verdict : null;
+    };
+
+    // If it's already an object (parsed by API client)
+    if (typeof rawVerdict === 'object' && rawVerdict !== null) {
+      console.log('Path: Already an object');
+      return extractFromObject(rawVerdict) || 'Challenge evaluated by AI referee.';
+    }
+
+    // If it's a string
+    if (typeof rawVerdict === 'string') {
+      const trimmed = rawVerdict.trim();
+      console.log('Path: String, trimmed starts with {:', trimmed.startsWith('{'));
+
+      // If it looks like JSON, try to parse it
+      if (trimmed.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          console.log('JSON.parse succeeded:', parsed);
+          const result = extractFromObject(parsed);
+          console.log('extractFromObject result:', result);
+          return result || 'Challenge evaluated by AI referee.';
+        } catch (e) {
+          console.log('JSON.parse FAILED:', e);
+          // JSON parsing failed, try regex extraction
+          // Use a more robust regex that handles escaped characters
+          const regex = new RegExp(`"${verdictKey}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`);
+          const match = trimmed.match(regex);
+          if (match && match[1]) {
+            console.log('Regex matched:', match[1]);
+            // Unescape any escaped characters
+            return match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
+          }
+          console.log('Regex also failed');
+          // If regex also failed, don't return raw JSON - return generic message
+          return 'Challenge evaluated by AI referee.';
+        }
+      }
+
+      // It's a plain text verdict (old format) - return as-is
+      console.log('Path: Plain text, returning trimmed');
+      return trimmed;
+    }
+
+    console.log('Path: Fallback');
+    return 'Challenge evaluated by AI referee.';
+  };
+
   const renderNotionActivityRow = (
     username: string,
     isMe: boolean,
@@ -227,6 +345,7 @@ export default function ChallengeDetailScreen() {
   const isCompleted = challenge.status === 'completed';
   const isStudying = challenge.category === 'studying';
   const canRespond = isOpponent && isPending;
+  const canCancel = isCreator && isPending;
   const canEvaluate = isActive && challenge.challenge_prompt;
 
   // Get user's Notion page and activity
@@ -244,7 +363,13 @@ export default function ChallengeDetailScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </Pressable>
         <Text style={styles.headerTitle}>
-          {isPending ? 'Challenge Invitation' : isCompleted ? 'Challenge Complete' : 'Active Challenge'}
+          {isPending
+            ? isCreator
+              ? 'Pending Challenge'
+              : 'Challenge Invitation'
+            : isCompleted
+            ? 'Challenge Complete'
+            : 'Active Challenge'}
         </Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -289,18 +414,34 @@ export default function ChallengeDetailScreen() {
               <Ionicons name="shield-checkmark" size={24} color={colors.accent} />
               <Text style={styles.verdictTitle}>AI REFEREE VERDICT</Text>
             </View>
-            <Text style={styles.verdictText}>{challenge.ai_verdict}</Text>
             {challenge.winner_id ? (
-              <View style={styles.winnerBadge}>
-                <Ionicons name="trophy" size={20} color={colors.background} />
-                <Text style={styles.winnerText}>Winner: @{getWinnerUsername()}</Text>
-              </View>
+              didUserWin() ? (
+                <View style={styles.winnerBadge}>
+                  <Ionicons name="trophy" size={20} color={colors.background} />
+                  <Text style={styles.winnerText}>You won!</Text>
+                </View>
+              ) : (
+                <View style={[styles.winnerBadge, styles.lossBadge]}>
+                  <Ionicons name="trophy" size={20} color={colors.text} />
+                  <Text style={[styles.winnerText, styles.lossText]}>@{getWinnerUsername()} won</Text>
+                </View>
+              )
             ) : (
               <View style={[styles.winnerBadge, styles.tieBadge]}>
                 <Ionicons name="swap-horizontal" size={20} color={colors.text} />
                 <Text style={[styles.winnerText, styles.tieText]}>It's a tie!</Text>
               </View>
             )}
+            <View style={styles.verdictExplanation}>
+              <Text style={styles.verdictLabel}>
+                {!challenge.winner_id
+                  ? 'Explanation:'
+                  : didUserWin()
+                  ? 'Why you won:'
+                  : 'Why you lost:'}
+              </Text>
+              <Text style={styles.verdictText}>{getPersonalizedVerdict()}</Text>
+            </View>
           </View>
         )}
 
@@ -489,6 +630,29 @@ export default function ChallengeDetailScreen() {
         </View>
       )}
 
+      {canCancel && (
+        <View style={styles.footer}>
+          <View style={styles.pendingInfo}>
+            <Ionicons name="time-outline" size={20} color={colors.textMuted} />
+            <Text style={styles.pendingInfoText}>
+              Waiting for @{challenge.opponent?.username || 'opponent'} to respond
+            </Text>
+          </View>
+          <Pressable
+            style={styles.cancelButton}
+            onPress={handleCancel}
+            disabled={isActionLoading}
+          >
+            <Text style={styles.cancelText}>
+              {isActionLoading ? 'CANCELLING...' : 'CANCEL CHALLENGE'}
+            </Text>
+          </Pressable>
+          <Text style={styles.cancelHint}>
+            Your stake will be refunded
+          </Text>
+        </View>
+      )}
+
       {canEvaluate && (
         <View style={styles.footer}>
           <Pressable
@@ -525,6 +689,14 @@ export default function ChallengeDetailScreen() {
           }
         }}
         selectedPageId={isPending && isOpponent ? selectedAcceptPage?.id : myNotionPageId}
+      />
+
+      {/* Result Popup */}
+      <ChallengeResultPopup
+        visible={showResultPopup}
+        isWin={resultIsWin}
+        amount={challenge?.stake_cents || 0}
+        onDismiss={() => setShowResultPopup(false)}
       />
     </SafeAreaView>
   );
@@ -642,7 +814,18 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 14,
     lineHeight: 22,
-    marginBottom: 16,
+  },
+  verdictExplanation: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  verdictLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
   },
   winnerBadge: {
     flexDirection: 'row',
@@ -656,6 +839,11 @@ const styles = StyleSheet.create({
   tieBadge: {
     backgroundColor: colors.border,
   },
+  lossBadge: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.5)',
+  },
   winnerText: {
     color: colors.background,
     fontSize: 16,
@@ -663,6 +851,9 @@ const styles = StyleSheet.create({
   },
   tieText: {
     color: colors.text,
+  },
+  lossText: {
+    color: '#ef4444',
   },
   summaryCard: {
     backgroundColor: colors.card,
@@ -808,6 +999,36 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   evaluateHint: {
+    color: colors.textMuted,
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  // Cancel button styles (for creators)
+  pendingInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  pendingInfoText: {
+    color: colors.textMuted,
+    fontSize: 14,
+  },
+  cancelButton: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.error,
+    padding: 16,
+    alignItems: 'center',
+  },
+  cancelText: {
+    color: colors.error,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cancelHint: {
     color: colors.textMuted,
     fontSize: 12,
     textAlign: 'center',
