@@ -10,7 +10,7 @@ Rival turns productivity into a competitive game with real stakes. Users challen
 
 - **Coding**: Make 5+ GitHub commits
 - **Studying**: Complete study sessions tracked in Notion
-- **Custom**: Any measurable goal verified by AI
+- **Custom**: A measurable goal verified by AI
 
 Both players stake equal amounts. The AI referee monitors progress automatically and settles the winner. Winner takes home 85-90% of the combined stake.
 
