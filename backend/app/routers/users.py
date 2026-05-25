@@ -2,17 +2,19 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from pydantic import BaseModel
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.clock import utcnow
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.challenge import Challenge, ChallengeStatus
-from app.models.balance_history import BalanceHistory
+from app.models.balance_history import BalanceEventType, BalanceHistory
 from app.schemas.user import UserResponse
 from app.schemas.challenge import UserPublic, UserSearchRequest, UserSearchResponse
 from app.schemas.balance_history import BalanceHistoryResponse, BalanceDataPoint
+from app.services.balance_service import apply_balance_change
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -27,25 +29,6 @@ class UserStats(BaseModel):
 
 class AddBalanceRequest(BaseModel):
     amount_cents: int
-
-
-def record_balance_change(
-    db: Session,
-    user: User,
-    change_cents: int,
-    event_type: str,
-    challenge_id: Optional[int] = None,
-) -> BalanceHistory:
-    """Record a balance change in the history table."""
-    record = BalanceHistory(
-        user_id=user.id,
-        balance_cents=user.balance_cents,
-        change_cents=change_cents,
-        event_type=event_type,
-        challenge_id=challenge_id,
-    )
-    db.add(record)
-    return record
 
 
 # Period mappings for balance history
@@ -135,23 +118,26 @@ def add_balance(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Add funds to user's balance."""
-    if request.amount_cents < 1000:
+    """
+    DEMO-ONLY top-up. In production this would be replaced by a Stripe webhook
+    handler that credits the user's balance after a confirmed payment intent.
+    Kept here so the betting flow is testable end-to-end without payments wired up.
+    """
+    MIN_TOPUP_CENTS = 1000   # $10
+    MAX_TOPUP_CENTS = 10000  # $100 per call — caps demo funding abuse.
+
+    if request.amount_cents < MIN_TOPUP_CENTS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Minimum top-up amount is $10",
+            detail=f"Minimum top-up amount is ${MIN_TOPUP_CENTS / 100:.0f}",
+        )
+    if request.amount_cents > MAX_TOPUP_CENTS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Demo top-up is capped at ${MAX_TOPUP_CENTS / 100:.0f} per call",
         )
 
-    current_user.balance_cents += request.amount_cents
-
-    # Record balance change
-    record_balance_change(
-        db=db,
-        user=current_user,
-        change_cents=request.amount_cents,
-        event_type="deposit",
-    )
-
+    apply_balance_change(db, current_user, request.amount_cents, BalanceEventType.DEPOSIT)
     db.commit()
     db.refresh(current_user)
     return current_user
@@ -172,7 +158,7 @@ def get_balance_history(
     )
 
     if days is not None:
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = utcnow() - timedelta(days=days)
         query = query.filter(BalanceHistory.created_at >= cutoff)
 
     # Get records ordered by time
@@ -200,7 +186,7 @@ def get_balance_history(
         # Add a single point at current balance
         data_points = [
             BalanceDataPoint(
-                timestamp=datetime.utcnow(),
+                timestamp=utcnow(),
                 balance_cents=current_balance,
             )
         ]

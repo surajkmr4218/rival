@@ -1,8 +1,19 @@
+import enum
+
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
-from datetime import datetime
 
 from app.core.database import Base
+from app.core.clock import utcnow
+
+
+class BalanceEventType(str, enum.Enum):
+    DEPOSIT = "deposit"
+    WITHDRAWAL = "withdrawal"
+    STAKE = "stake"
+    STAKE_REFUND = "stake_refund"
+    CHALLENGE_WIN = "challenge_win"
+    CHALLENGE_LOSS = "challenge_loss"
 
 
 class BalanceHistory(Base):
@@ -17,13 +28,14 @@ class BalanceHistory(Base):
     # How much changed (positive for gains, negative for losses)
     change_cents = Column(Integer, nullable=False)
 
-    # Type of event: 'deposit', 'challenge_win', 'challenge_loss', 'withdrawal', 'stake', 'stake_refund'
+    # Stored as string for backwards compatibility with existing rows.
+    # Use BalanceEventType members at call sites.
     event_type = Column(String, nullable=False)
 
     # Optional reference to challenge (for win/loss events)
     challenge_id = Column(Integer, ForeignKey("challenges.id"), nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=utcnow, index=True)
 
     # Relationships
     user = relationship("User", backref="balance_history")

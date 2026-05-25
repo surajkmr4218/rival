@@ -127,21 +127,22 @@ async def connect_notion(
 
     try:
         # Exchange code for access token (use backend callback URL)
-        logger.info(f"Exchanging code for token, redirect_uri={settings.NOTION_REDIRECT_URI}")
+        logger.info(f"Exchanging code for Notion token, redirect_uri={settings.NOTION_REDIRECT_URI}")
         token_data = await exchange_code_for_token(
             code=request.code,
             redirect_uri=settings.NOTION_REDIRECT_URI,
         )
-        logger.info(f"Token response: {token_data}")
 
         access_token = token_data.get("access_token")
         workspace_id = token_data.get("workspace_id", "")
         workspace_name = token_data.get("workspace_name", "Notion Workspace")
 
         if not access_token:
+            # Bubble Notion's own error message if present (e.g. invalid_grant)
+            detail = token_data.get("error_description") or token_data.get("error") or "No access token received"
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No access token received",
+                detail=f"Notion: {detail}",
             )
 
         # Save to user record

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
+from app.core.clock import utcnow
 from app.core.database import SessionLocal
 from app.core.notion import NotionClient
 from app.models.challenge import Challenge, ChallengeCategory, ChallengeStatus
@@ -44,7 +45,7 @@ async def poll_challenge(challenge: Challenge, db: Session) -> None:
         except Exception as e:
             logger.warning(f"Failed to poll opponent Notion for challenge {challenge.id}: {e}")
 
-    challenge.last_notion_poll = datetime.utcnow()
+    challenge.last_notion_poll = utcnow()
 
 
 async def poll_active_studying_challenges() -> None:
@@ -53,7 +54,7 @@ async def poll_active_studying_challenges() -> None:
 
     try:
         # Get active studying challenges that haven't been polled recently
-        cutoff = datetime.utcnow() - timedelta(seconds=POLL_INTERVAL - 10)
+        cutoff = utcnow() - timedelta(seconds=POLL_INTERVAL - 10)
 
         challenges = db.query(Challenge).filter(
             Challenge.category == ChallengeCategory.STUDYING,

@@ -14,7 +14,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Gemini](https://img.shields.io/badge/AI-Gemini%202.0%20Flash-8E75B2?logo=googlegemini&logoColor=white)](https://ai.google.dev/)
 
-[**Demo on Devpost**](https://devpost.com/software/1170625) · [Architecture](#-architecture) · [API Reference](#-api-reference) · [Getting Started](#-getting-started)
+[**Demo on Devpost**](https://devpost.com/software/1170625)  
 
 </div>
 
@@ -22,7 +22,7 @@
 
 ## 📖 Overview
 
-Most productivity apps rely on streaks and badges — extrinsic motivation that fades. Rival adds the one incentive that doesn't: **money on the line, head-to-head against a real opponent.**
+Most productivity apps rely on streaks and badges. Rival adds the a better incentive: **money on the line, head-to-head against a real opponent.**
 
 Two players agree on a goal ("Make 5+ meaningful commits in 24h", "Finish 3 chapters of organic chemistry"), each stake an equal amount ($1–$500), and the clock starts. When time's up, Rival doesn't ask anyone to self-report. Instead it pulls **real activity signals** — commits, PRs, and issues from the **GitHub API**, or edited pages and study notes from the **Notion API** — and hands them to an **AI referee** that produces an auditable verdict with per-player reasoning. The winner takes the pot.
 

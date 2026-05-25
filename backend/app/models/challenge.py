@@ -1,9 +1,9 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum, Text, JSON
 from sqlalchemy.orm import relationship
-from datetime import datetime
 import enum
 
 from app.core.database import Base
+from app.core.clock import utcnow
 
 
 class ChallengeCategory(str, enum.Enum):
@@ -15,6 +15,7 @@ class ChallengeCategory(str, enum.Enum):
 class ChallengeStatus(str, enum.Enum):
     PENDING = "pending"
     ACTIVE = "active"
+    EVALUATING = "evaluating"  # AI evaluation in progress (background task)
     COMPLETED = "completed"
     DECLINED = "declined"
     CANCELLED = "cancelled"
@@ -56,7 +57,7 @@ class Challenge(Base):
     opponent_progress = Column(Integer, default=0)
     winner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     accepted_at = Column(DateTime, nullable=True)
     ends_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
