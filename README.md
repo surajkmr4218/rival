@@ -4,7 +4,7 @@
 
 ### Put your money where your goals are.
 
-**Rival is a 1v1 productivity-betting app where two people stake real money on measurable goals — and an AI referee, backed by live data from GitHub and Notion, decides who wins.**
+**Rival is a 1v1 productivity-betting app where two people stake real money on measurable goals and an AI referee, backed by live data from GitHub and Notion, decides who wins.**
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -26,7 +26,7 @@ Most productivity apps rely on streaks and badges — extrinsic motivation that 
 
 Two players agree on a goal ("Make 5+ meaningful commits in 24h", "Finish 3 chapters of organic chemistry"), each stake an equal amount ($1–$500), and the clock starts. When time's up, Rival doesn't ask anyone to self-report. Instead it pulls **real activity signals** — commits, PRs, and issues from the **GitHub API**, or edited pages and study notes from the **Notion API** — and hands them to an **AI referee** that produces an auditable verdict with per-player reasoning. The winner takes the pot.
 
-> **Note on scope:** This is a working full-stack prototype. Stake settlement runs against an internal wallet ledger; real-money rails (Stripe) and the platform commission are intentionally stubbed and documented as such — see [Design Decisions](#-design-decisions).
+> **Note on scope:** This is a working full-stack prototype. Stake settlement runs against an internal wallet ledger; real-money rails (Stripe) are intentionally stubbed and documented as such — see [Design Decisions](#-design-decisions).
 
 ---
 
@@ -59,107 +59,6 @@ Two players agree on a goal ("Make 5+ meaningful commits in 24h", "Finish 3 chap
 
 ---
 
-## 🏗 Architecture
-
-Rival is a **mobile client + REST API + Postgres** system with a clean separation between transport (routers), business logic (services), and external clients (core).
-
-```mermaid
-flowchart TD
-    subgraph Mobile["📱 React Native + Expo"]
-        UI[Screens & Components]
-        Z[Zustand store]
-        AX[Axios + JWT interceptor]
-        UI --> Z --> AX
-    end
-
-    subgraph API["⚡ FastAPI"]
-        R[Routers<br/>auth · users · challenges · github · notion]
-        S[Services<br/>challenge · balance · notion_poller]
-        C[Core clients<br/>github · notion · gemini · security]
-        R --> S --> C
-    end
-
-    DB[(PostgreSQL<br/>SQLAlchemy + Alembic)]
-    GH[GitHub API]
-    NO[Notion API]
-    GM[Gemini 2.0 Flash]
-
-    AX -- HTTPS / Bearer JWT --> R
-    S --> DB
-    C --> GH
-    C --> NO
-    C --> GM
-```
-
-### The AI evaluation flow
-
-Evaluation can take many seconds (multiple third-party fetches + an LLM call), so it never blocks an HTTP request. The API uses an **async kickoff + poll** pattern with a dedicated `evaluating` state, making the long-running job durable and the endpoint safe to retry.
-
-```mermaid
-sequenceDiagram
-    participant App as 📱 Client
-    participant API as ⚡ FastAPI
-    participant BG as 🧵 Background Task
-    participant Ext as 🐙 GitHub / 📝 Notion
-    participant AI as 🤖 Gemini
-
-    App->>API: POST /challenges/{id}/evaluate
-    API->>API: validate window ended, status → evaluating
-    API-->>App: 202 Accepted (status: evaluating)
-    API->>BG: enqueue run_evaluation()
-    BG->>Ext: fetch activity in challenge window
-    Ext-->>BG: commits / PRs / study pages
-    BG->>AI: evaluate(prompt, activity)
-    AI-->>BG: { winner, verdicts, summaries }
-    BG->>API: settle stakes, status → completed
-    loop until completed
-        App->>API: GET /challenges/{id}
-        API-->>App: status + verdict when ready
-    end
-```
-
-### Data model
-
-```mermaid
-erDiagram
-    USER ||--o{ CHALLENGE : "creates / opposes / wins"
-    USER ||--o{ BALANCE_HISTORY : owns
-    CHALLENGE ||--o{ BALANCE_HISTORY : "settles"
-
-    USER {
-        int id PK
-        string email UK
-        string username UK
-        string password_hash
-        int balance_cents
-        string github_access_token
-        string notion_access_token
-    }
-    CHALLENGE {
-        int id PK
-        int creator_id FK
-        int opponent_id FK
-        int winner_id FK
-        enum category "coding | studying"
-        enum status "pending..completed"
-        int stake_cents
-        string challenge_prompt
-        json ai_verdict
-        datetime ends_at
-    }
-    BALANCE_HISTORY {
-        int id PK
-        int user_id FK
-        int challenge_id FK
-        int balance_cents "snapshot after event"
-        int change_cents "signed delta"
-        string event_type
-        datetime created_at
-    }
-```
-
----
-
 ## 🧠 Design Decisions
 
 A few choices that keep the system correct, auditable, and honest about its scope:
@@ -173,140 +72,6 @@ A few choices that keep the system correct, auditable, and honest about its scop
 
 ---
 
-## 📁 Project Structure
-
-```
-rival/
-├── backend/                        # FastAPI service
-│   ├── app/
-│   │   ├── main.py                 # App factory, CORS, lifespan (starts pollers)
-│   │   ├── routers/                # HTTP layer — auth, users, challenges, github, notion
-│   │   ├── services/               # Business logic — challenge, balance, notion_poller
-│   │   ├── models/                 # SQLAlchemy models — user, challenge, balance_history
-│   │   ├── schemas/                # Pydantic request/response contracts
-│   │   └── core/                   # config, database, security, github, notion, gemini, rate_limit
-│   ├── alembic/                    # Versioned DB migrations
-│   └── requirements.txt
-│
-├── frontend/                       # React Native + Expo app
-│   ├── app/                        # expo-router routes
-│   │   ├── _layout.tsx             # Root layout + auth guard
-│   │   ├── login.tsx
-│   │   ├── (tabs)/                 # Dashboard · History · Profile
-│   │   ├── challenge/              # create · [id] detail · pending
-│   │   └── auth/github.tsx         # OAuth deep-link handler
-│   ├── components/                 # Charts, cards, sliders, pickers, animations
-│   └── lib/                        # api · auth · storage · theme · types · config
-│
-└── docs/                           # Codebase walkthrough & technical notes
-```
-
----
-
-## 🔌 API Reference
-
-Base URL: `http://localhost:8000` · Interactive docs at `/docs` (Swagger) and `/redoc`.
-
-<details>
-<summary><b>Auth & Users</b></summary>
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/auth/register` | Create an account |
-| `POST` | `/api/auth/login` | Log in (OAuth2 form) → JWT |
-| `GET` | `/api/users/me` | Current user |
-| `POST` | `/api/users/search` | Find opponents by username |
-| `GET` | `/api/users/me/stats` | Wins, losses, earnings, streak, win rate |
-| `GET` | `/api/users/me/balance-history` | Time-series for the balance chart |
-| `POST` | `/api/users/me/balance` | Demo wallet top-up |
-
-</details>
-
-<details>
-<summary><b>Challenges</b></summary>
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/challenges` | Create a challenge (debits creator's stake) |
-| `GET` | `/api/challenges` · `/pending` · `/active` | List views |
-| `GET` | `/api/challenges/{id}` | Detail (auto-refreshes progress) |
-| `POST` | `/api/challenges/{id}/accept` | Accept (debits opponent) |
-| `POST` | `/api/challenges/{id}/decline` · `/cancel` | Cancel with stake refund |
-| `POST` | `/api/challenges/{id}/refresh` | Force a progress refresh |
-| `POST` | `/api/challenges/{id}/evaluate` | Kick off async AI evaluation (`202`) |
-
-</details>
-
-<details>
-<summary><b>Integrations</b></summary>
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/github/oauth-url` · `/status` | GitHub OAuth + connection status |
-| `POST` `DELETE` | `/api/github/connect` · `/disconnect` | Manage GitHub link |
-| `GET` | `/api/github/commits` | Commit count within a window |
-| `GET` | `/api/notion/oauth-url` · `/callback` · `/status` | Notion OAuth relay + status |
-| `POST` `DELETE` | `/api/notion/connect` · `/disconnect` | Manage Notion link |
-| `GET` | `/api/notion/pages` | Search workspace pages |
-
-</details>
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Python 3.12+ · Node.js 18+ · PostgreSQL 14+
-- A Google **Gemini API key**, and OAuth apps for **GitHub** and **Notion**
-
-### 1. Backend
-
-```bash
-cd backend
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-
-createdb rival
-alembic upgrade head
-
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Create `backend/.env`:
-
-```ini
-DATABASE_URL=postgresql://localhost/rival
-SECRET_KEY=change-me-to-a-long-random-string
-
-GEMINI_API_KEY=your-gemini-key
-
-GITHUB_CLIENT_ID=...
-GITHUB_CLIENT_SECRET=...
-GITHUB_REDIRECT_URI=rival://auth/github
-
-NOTION_CLIENT_ID=...
-NOTION_CLIENT_SECRET=...
-NOTION_REDIRECT_URI=http://localhost:8000/api/notion/callback
-```
-
-### 2. Frontend
-
-```bash
-cd frontend
-npm install
-
-# On a physical device or simulator, Expo must reach your machine's LAN IP,
-# not localhost. On macOS: ipconfig getifaddr en0
-export EXPO_PUBLIC_BACKEND_URL=http://192.168.1.42:8000
-
-npx expo start
-```
-
-Scan the QR code with **Expo Go**, or press `i` / `a` for the iOS / Android simulator.
-
----
-
 ## 🗺 Roadmap
 
 - [ ] Stripe payment intents for real-money deposits & withdrawals
@@ -316,12 +81,3 @@ Scan the QR code with **Expo Go**, or press `i` / `a` for the iOS / Android simu
 - [ ] Structured logging + error monitoring (Sentry)
 - [ ] Push notifications for invites, results, and deadlines
 
----
-
-## 👤 Author
-
-**Suraj Kumar** — full-stack engineer
-
-If you're a recruiter or fellow engineer, the [`docs/`](docs/) folder includes a guided codebase walkthrough and a write-up of the technical decisions above.
-</content>
-</invoke>
