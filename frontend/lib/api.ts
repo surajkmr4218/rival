@@ -49,13 +49,21 @@ export const acceptChallenge = (id: number, data?: { opponent_notion_page_id?: s
 export const declineChallenge = (id: number) => api.post(`/api/challenges/${id}/decline`);
 export const cancelChallenge = (id: number) => api.post(`/api/challenges/${id}/cancel`);
 export const refreshChallengeProgress = (id: number) => api.post(`/api/challenges/${id}/refresh`);
+// Kicks off AI evaluation. Returns 202 immediately with status='evaluating'.
+// Poll getChallenge() until status flips to 'completed'.
 export const evaluateChallenge = (id: number) =>
-  api.post(`/api/challenges/${id}/evaluate`, {}, { timeout: 60000 }); // 60s timeout for AI evaluation
+  api.post(`/api/challenges/${id}/evaluate`);
 
 // GitHub
 export const getGitHubStatus = () => api.get('/api/github/status');
-export const getGitHubOAuthUrl = (redirectUri?: string) =>
-  api.get('/api/github/oauth-url', { params: redirectUri ? { redirect_uri: redirectUri } : {} });
+// GitHub's callback URL is configured server-side (GITHUB_REDIRECT_URI) and
+// must match what's registered in the GitHub OAuth App — the client can't
+// override it. The backend's /api/github/callback then deep-links into the
+// app, bouncing to whatever `returnUrl` we pass here (validated against an
+// allowlist of app schemes). This is what lets the same flow work in Expo Go
+// (exp://...) and in a real build (rival://...).
+export const getGitHubOAuthUrl = (returnUrl?: string) =>
+  api.get('/api/github/oauth-url', { params: returnUrl ? { return_url: returnUrl } : {} });
 export const connectGitHub = (code: string) => api.post('/api/github/connect', { code });
 export const disconnectGitHub = () => api.delete('/api/github/disconnect');
 export const getGitHubCommits = (hours?: number) =>

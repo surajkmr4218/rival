@@ -28,7 +28,15 @@ export interface UserPublic {
 
 // Challenge types
 export type ChallengeCategory = 'coding' | 'studying';
-export type ChallengeStatus = 'pending' | 'active' | 'completed' | 'declined' | 'cancelled';
+export type ChallengeStatus = 'pending' | 'active' | 'evaluating' | 'completed' | 'declined' | 'cancelled';
+
+// Shape of the JSON object stored in Challenge.ai_verdict
+export interface AiVerdict {
+  winner: 'creator' | 'opponent' | 'tie';
+  creator_verdict: string;
+  opponent_verdict: string;
+  reasoning?: string;
+}
 
 // Notion activity tracking
 export interface NotionPageEdited {
