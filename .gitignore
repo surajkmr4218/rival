@@ -40,6 +40,7 @@ build/
 *.pem
 *.key
 secrets/
+docs/
 
 # Claude AI workspace
 .claude/

@@ -24,9 +24,9 @@
 
 Most productivity apps rely on streaks and badges. Rival adds the a better incentive: **money on the line, head-to-head against a real opponent.**
 
-Two players agree on a goal ("Make 5+ meaningful commits in 24h", "Finish 3 chapters of organic chemistry"), each stake an equal amount ($1–$500), and the clock starts. When time's up, Rival doesn't ask anyone to self-report. Instead it pulls **real activity signals** — commits, PRs, and issues from the **GitHub API**, or edited pages and study notes from the **Notion API** — and hands them to an **AI referee** that produces an auditable verdict with per-player reasoning. The winner takes the pot.
+Two players agree on a goal ("Make 5+ meaningful commits in 24h", "Take notes on 3 chapters of organic chemistry"), each stake an equal amount ($1–$500), and the clock starts. When time's up, Rival doesn't ask anyone to self-report. Instead it pulls **real activity signals** (commits, PRs, and issues from the **GitHub API** or edited pages and study notes from the **Notion API**) and hands them to an **AI referee** that produces an auditable verdict with per-player reasoning. The winner takes the pot.
 
-> **Note on scope:** This is a working full-stack prototype. Stake settlement runs against an internal wallet ledger; real-money rails (Stripe) are intentionally stubbed and documented as such — see [Design Decisions](#-design-decisions).
+> **Note on scope:** This is a working full-stack prototype. Stake settlement runs against an internal wallet ledger; real-money rails (Stripe) are intentionally stubbed for now.
 
 ---
 
