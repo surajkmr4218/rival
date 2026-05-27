@@ -1,0 +1,7 @@
+# Dev/test dependencies — kept separate so the production image stays slim.
+# Install with: pip install -r requirements.txt -r requirements-dev.txt
+-r requirements.txt
+
+pytest==8.3.4
+pytest-asyncio==0.24.0
+httpx==0.28.1  # already a runtime dep; pinned again so TestClient works in isolation

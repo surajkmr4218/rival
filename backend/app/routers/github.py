@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -10,6 +12,8 @@ from app.core.security import get_current_user
 from app.core.config import settings
 from app.core.github import GitHubClient, exchange_code_for_token
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 
 # Fallback deep-link route inside the mobile app that handles the OAuth result.
 # Matches the file `frontend/app/auth/github.tsx`. The `rival://` scheme is
@@ -111,10 +115,13 @@ async def connect_github(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        # Log the underlying error server-side; return a generic message so we
+        # don't leak internal exception details (stack hints, library paths) to API consumers.
+        logger.exception("GitHub connect failed for user_id=%s", current_user.id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to connect GitHub: {str(e)}",
+            detail="Failed to connect GitHub",
         )
 
 
@@ -157,10 +164,11 @@ async def get_commits(
             github_username=current_user.github_username,
         )
 
-    except Exception as e:
+    except Exception:
+        logger.exception("GitHub commits fetch failed for user_id=%s", current_user.id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch commits: {str(e)}",
+            detail="Failed to fetch commits",
         )
 
 

@@ -159,10 +159,13 @@ async def connect_notion(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        # Log server-side; return a generic message so we don't leak internal
+        # exception details (stack hints, library paths) to API consumers.
+        logger.exception("Notion connect failed for user_id=%s", current_user.id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to connect Notion: {str(e)}",
+            detail="Failed to connect Notion",
         )
 
 
@@ -204,8 +207,9 @@ async def get_pages(
             for page in pages[:20]  # Limit results
         ]
 
-    except Exception as e:
+    except Exception:
+        logger.exception("Notion pages fetch failed for user_id=%s", current_user.id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch pages: {str(e)}",
+            detail="Failed to fetch pages",
         )

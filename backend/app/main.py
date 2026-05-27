@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from app.core.database import engine, Base
+from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.routers import auth, users, challenges, github, notion
 from app.services.notion_poller import start_polling_loop
@@ -16,8 +16,10 @@ from app.services.notion_poller import start_polling_loop
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+# Schema is managed exclusively by Alembic (`alembic upgrade head`, run from
+# entrypoint.sh). We deliberately do NOT call Base.metadata.create_all here:
+# it bypasses migration history and lets the live schema drift from the
+# version-controlled migrations.
 
 
 @asynccontextmanager
@@ -48,11 +50,17 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS for iOS app
+# CORS — origins are env-configurable (ALLOWED_ORIGINS, comma-separated).
+# Never combine wildcard origins with credentials: it's invalid per the CORS
+# spec and most browsers ignore the Access-Control-Allow-Credentials header
+# in that combination. We use Bearer JWTs anyway, so credentials aren't needed
+# when origins are wildcarded for the native client.
+_allowed_origins = settings.allowed_origins_list
+_allow_credentials = "*" not in _allowed_origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_allowed_origins,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )

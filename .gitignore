@@ -40,7 +40,12 @@ build/
 *.pem
 *.key
 secrets/
-docs/
+
+# Docs
+docs/ai-referee-implementation-plan.md
+docs/CHALLENGE_FEATURE_SPEC.md
+docs/notion-integration-implementation-plan.md
+docs/recruiter-impressive-roadmap.md
 
 # Claude AI workspace
 .claude/
