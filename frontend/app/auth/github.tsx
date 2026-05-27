@@ -4,6 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../lib/theme';
 import { connectGitHub } from '../../lib/api';
+import AnimatedMount from '../../components/anim/AnimatedMount';
 
 export default function GitHubCallbackScreen() {
   const router = useRouter();
@@ -55,7 +56,7 @@ export default function GitHubCallbackScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.card}>
+      <AnimatedMount key={status} style={styles.card}>
         {status === 'loading' && (
           <>
             <ActivityIndicator size="large" color={colors.accent} />
@@ -84,7 +85,7 @@ export default function GitHubCallbackScreen() {
             <Text style={styles.redirect}>Redirecting...</Text>
           </>
         )}
-      </View>
+      </AnimatedMount>
     </View>
   );
 }

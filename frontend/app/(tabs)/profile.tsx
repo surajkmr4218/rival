@@ -2,11 +2,13 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, RefreshControl, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
+import AnimatedMount from '../../components/anim/AnimatedMount';
+import PressableScale from '../../components/anim/PressableScale';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../lib/auth';
-import { colors } from '../../lib/theme';
+import { colors, motion, glow } from '../../lib/theme';
 import {
   getGitHubStatus,
   getGitHubOAuthUrl,
@@ -133,9 +135,14 @@ export default function ProfileScreen() {
   const handleConnectGitHub = async () => {
     setIsConnectingGitHub(true);
     try {
-      const redirectUri = AuthSession.makeRedirectUri({ scheme: 'rival', path: 'github/callback' });
-      const oauthResponse = await getGitHubOAuthUrl(redirectUri);
-      const result = await WebBrowser.openAuthSessionAsync(oauthResponse.data.url, redirectUri);
+      // GitHub OAuth Apps don't accept custom URI schemes — the backend
+      // (GITHUB_REDIRECT_URI) is registered with GitHub and relays the user
+      // back into the app via this deep link. `makeRedirectUri` returns the
+      // RIGHT scheme for the current environment automatically: `exp://...`
+      // in Expo Go, `rival://...` in a real (dev or production) build.
+      const appReturnUrl = AuthSession.makeRedirectUri({ scheme: 'rival', path: 'auth/github' });
+      const oauthResponse = await getGitHubOAuthUrl(appReturnUrl);
+      const result = await WebBrowser.openAuthSessionAsync(oauthResponse.data.url, appReturnUrl);
 
       if (result.type === 'success' && result.url) {
         const url = new URL(result.url);
@@ -245,12 +252,12 @@ export default function ProfileScreen() {
             <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
             <Text style={styles.connectedText}>{connectedLabel}</Text>
           </View>
-          <Pressable style={styles.disconnectBtn} onPress={onDisconnect}>
+          <PressableScale style={styles.disconnectBtn} onPress={onDisconnect}>
             <Text style={styles.disconnectText}>Disconnect</Text>
-          </Pressable>
+          </PressableScale>
         </View>
       ) : (
-        <Pressable style={styles.connectBtn} onPress={onConnect} disabled={isConnecting}>
+        <PressableScale style={styles.connectBtn} onPress={onConnect} disabled={isConnecting}>
           {isConnecting ? (
             <ActivityIndicator color={colors.background} size="small" />
           ) : (
@@ -259,7 +266,7 @@ export default function ProfileScreen() {
               <Text style={styles.connectText}>Connect {title}</Text>
             </>
           )}
-        </Pressable>
+        </PressableScale>
       )}
     </View>
   );
@@ -278,21 +285,23 @@ export default function ProfileScreen() {
         <Text style={styles.email}>{user?.email}</Text>
 
         {/* Balance Card */}
-        <View style={styles.balanceCard}>
+        <AnimatedMount delay={0} style={[styles.balanceCard, glow(colors.accent, 0.22)]}>
           <Text style={styles.balanceLabel}>BALANCE</Text>
           <Text style={styles.balanceValue}>{formatBalance(balance)}</Text>
-          <Pressable style={styles.addFundsBtn} onPress={() => setShowTopUp(true)}>
+          <PressableScale style={styles.addFundsBtn} onPress={() => setShowTopUp(true)}>
             <Ionicons name="add-circle" size={20} color={colors.background} />
             <Text style={styles.addFundsText}>Add Funds</Text>
-          </Pressable>
-        </View>
+          </PressableScale>
+        </AnimatedMount>
 
         {/* Balance History Chart */}
-        <BalanceChart refreshTrigger={chartRefreshTrigger} />
+        <AnimatedMount delay={motion.stagger} style={styles.fullWidth}>
+          <BalanceChart refreshTrigger={chartRefreshTrigger} />
+        </AnimatedMount>
 
         {/* Stats Section */}
         {stats && (
-          <View style={styles.statsCard}>
+          <AnimatedMount delay={motion.stagger * 2} style={styles.statsCard}>
             <Text style={styles.statsTitle}>YOUR STATS</Text>
             <View style={styles.statsGrid}>
               <View style={styles.statItem}>
@@ -322,36 +331,40 @@ export default function ProfileScreen() {
                 <Text style={styles.statLabel}>Win Rate</Text>
               </View>
             </View>
-          </View>
+          </AnimatedMount>
         )}
 
         {/* GitHub Integration */}
-        <IntegrationCard
-          icon="logo-github"
-          title="GitHub"
-          isLoading={isLoadingGitHub}
-          isConnected={githubStatus.connected}
-          connectedLabel={`@${githubStatus.username}`}
-          isConnecting={isConnectingGitHub}
-          onConnect={handleConnectGitHub}
-          onDisconnect={handleDisconnectGitHub}
-        />
+        <AnimatedMount delay={motion.stagger * 3} style={styles.fullWidth}>
+          <IntegrationCard
+            icon="logo-github"
+            title="GitHub"
+            isLoading={isLoadingGitHub}
+            isConnected={githubStatus.connected}
+            connectedLabel={`@${githubStatus.username}`}
+            isConnecting={isConnectingGitHub}
+            onConnect={handleConnectGitHub}
+            onDisconnect={handleDisconnectGitHub}
+          />
+        </AnimatedMount>
 
         {/* Notion Integration */}
-        <IntegrationCard
-          icon="book"
-          title="Notion"
-          isLoading={isLoadingNotion}
-          isConnected={notionStatus.connected}
-          connectedLabel={notionStatus.workspace_name || 'Connected'}
-          isConnecting={isConnectingNotion}
-          onConnect={handleConnectNotion}
-          onDisconnect={handleDisconnectNotion}
-        />
+        <AnimatedMount delay={motion.stagger * 4} style={styles.fullWidth}>
+          <IntegrationCard
+            icon="book"
+            title="Notion"
+            isLoading={isLoadingNotion}
+            isConnected={notionStatus.connected}
+            connectedLabel={notionStatus.workspace_name || 'Connected'}
+            isConnecting={isConnectingNotion}
+            onConnect={handleConnectNotion}
+            onDisconnect={handleDisconnectNotion}
+          />
+        </AnimatedMount>
 
-        <Pressable style={styles.logoutBtn} onPress={logout}>
+        <PressableScale style={styles.logoutBtn} onPress={logout}>
           <Text style={styles.logoutText}>LOGOUT</Text>
-        </Pressable>
+        </PressableScale>
       </ScrollView>
 
       {/* Top-up Drawer */}
@@ -373,6 +386,9 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingHorizontal: 24,
     paddingBottom: 120,
+  },
+  fullWidth: {
+    width: '100%',
   },
   username: {
     fontSize: 20,

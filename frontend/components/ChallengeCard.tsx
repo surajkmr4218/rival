@@ -1,13 +1,40 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Animated, Easing, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../lib/theme';
+import { colors, glow, motion } from '../lib/theme';
 import { Challenge } from '../lib/types';
+import PressableScale from './anim/PressableScale';
+import { useReducedMotion } from './anim/useReducedMotion';
 
 interface ChallengeCardProps {
   challenge: Challenge;
   currentUserId: number;
   onPress: () => void;
+}
+
+// Animated progress fill that grows from 0 to its target ratio on mount.
+function ProgressFill({ ratio, color }: { ratio: number; color: string }) {
+  const reduced = useReducedMotion();
+  const w = useRef(new Animated.Value(0)).current;
+  const target = Math.max(0, Math.min(1, ratio));
+
+  useEffect(() => {
+    if (reduced) {
+      w.setValue(target);
+      return;
+    }
+    const anim = Animated.timing(w, {
+      toValue: target,
+      duration: motion.slow,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    });
+    anim.start();
+    return () => anim.stop();
+  }, [target, reduced]);
+
+  const width = w.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+  return <Animated.View style={[styles.progressBar, { width, backgroundColor: color }]} />;
 }
 
 export default function ChallengeCard({ challenge, currentUserId, onPress }: ChallengeCardProps) {
@@ -52,10 +79,14 @@ export default function ChallengeCard({ challenge, currentUserId, onPress }: Cha
     return challenge.goal_period || '';
   };
 
+  const isEvaluating = challenge.status === 'evaluating';
+
   const getStatusColor = () => {
     switch (challenge.status) {
       case 'active':
         return colors.accent;
+      case 'evaluating':
+        return '#f59e0b'; // amber — matches detail-screen color
       case 'completed':
         return challenge.winner_id === currentUserId ? colors.accent : colors.error;
       case 'pending':
@@ -80,7 +111,10 @@ export default function ChallengeCard({ challenge, currentUserId, onPress }: Cha
   const maxProgress = Math.max(myProgress, theirProgress, 10);
 
   return (
-    <Pressable style={styles.container} onPress={onPress}>
+    <PressableScale
+      style={[styles.container, challenge.status === 'active' && glow(colors.accent, 0.22)]}
+      onPress={onPress}
+    >
       <View style={styles.header}>
         <View style={styles.categoryBadge}>
           <Ionicons name={getCategoryIcon()} size={16} color={colors.accent} />
@@ -111,25 +145,14 @@ export default function ChallengeCard({ challenge, currentUserId, onPress }: Cha
           <View style={styles.progressRow}>
             <Text style={styles.progressLabel}>You</Text>
             <View style={styles.progressBarContainer}>
-              <View
-                style={[
-                  styles.progressBar,
-                  { width: `${Math.min(100, (myProgress / maxProgress) * 100)}%` },
-                ]}
-              />
+              <ProgressFill ratio={myProgress / maxProgress} color={colors.accent} />
             </View>
             <Text style={styles.progressValue}>{myProgress}</Text>
           </View>
           <View style={styles.progressRow}>
             <Text style={styles.progressLabel}>Them</Text>
             <View style={styles.progressBarContainer}>
-              <View
-                style={[
-                  styles.progressBar,
-                  styles.progressBarOpponent,
-                  { width: `${Math.min(100, (theirProgress / maxProgress) * 100)}%` },
-                ]}
-              />
+              <ProgressFill ratio={theirProgress / maxProgress} color={colors.error} />
             </View>
             <Text style={styles.progressValue}>{theirProgress}</Text>
           </View>
@@ -143,7 +166,17 @@ export default function ChallengeCard({ challenge, currentUserId, onPress }: Cha
           <Text style={styles.verdictText}>AI Referee decided</Text>
         </View>
       )}
-    </Pressable>
+
+      {/* In-flight indicator while the AI referee evaluates */}
+      {isEvaluating && (
+        <View style={styles.verdictIndicator}>
+          <ActivityIndicator size="small" color="#f59e0b" />
+          <Text style={[styles.verdictText, { color: '#f59e0b' }]}>
+            AI Referee evaluating…
+          </Text>
+        </View>
+      )}
+    </PressableScale>
   );
 }
 

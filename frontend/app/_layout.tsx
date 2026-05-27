@@ -3,7 +3,6 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuth } from '../lib/auth';
-import { deleteToken } from '../lib/api';
 import { colors } from '../lib/theme';
 import { View, ActivityIndicator } from 'react-native';
 
@@ -13,12 +12,7 @@ export default function RootLayout() {
   const segments = useSegments();
 
   useEffect(() => {
-    // Clear token on app startup (for development - forces re-login each session)
-    const initialize = async () => {
-      await deleteToken();
-      await loadUser();
-    };
-    initialize();
+    loadUser();
   }, []);
 
   useEffect(() => {

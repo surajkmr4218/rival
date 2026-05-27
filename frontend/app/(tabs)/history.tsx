@@ -1,13 +1,15 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { colors } from '../../lib/theme';
+import { colors, motion } from '../../lib/theme';
 import { Challenge } from '../../lib/types';
 import { getChallenges } from '../../lib/api';
 import ChallengeCard from '../../components/ChallengeCard';
+import AnimatedMount from '../../components/anim/AnimatedMount';
+import { SkeletonCard } from '../../components/anim/Skeleton';
 import { useAuth } from '../../lib/auth';
 
 export default function HistoryScreen() {
@@ -54,8 +56,12 @@ export default function HistoryScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.accent} />
+        <View style={styles.listContent}>
+          {[0, 1, 2, 3].map((i) => (
+            <AnimatedMount key={i} delay={i * motion.stagger}>
+              <SkeletonCard />
+            </AnimatedMount>
+          ))}
         </View>
       </SafeAreaView>
     );
@@ -66,12 +72,14 @@ export default function HistoryScreen() {
       <FlatList
         data={challenges}
         keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <ChallengeCard
-            challenge={item}
-            currentUserId={user?.id || 0}
-            onPress={() => handleChallengePress(item)}
-          />
+        renderItem={({ item, index }) => (
+          <AnimatedMount delay={Math.min(index, 8) * motion.stagger}>
+            <ChallengeCard
+              challenge={item}
+              currentUserId={user?.id || 0}
+              onPress={() => handleChallengePress(item)}
+            />
+          </AnimatedMount>
         )}
         contentContainerStyle={styles.listContent}
         refreshControl={

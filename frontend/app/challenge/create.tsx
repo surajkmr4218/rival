@@ -13,12 +13,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { colors } from '../../lib/theme';
+import { colors, motion, glow } from '../../lib/theme';
 import { UserPublic, ChallengeCategory, NotionPage } from '../../lib/types';
 import { createChallenge } from '../../lib/api';
 import StakeSlider from '../../components/StakeSlider';
 import UserSearchInput from '../../components/UserSearchInput';
 import NotionPagePicker from '../../components/NotionPagePicker';
+import AnimatedMount from '../../components/anim/AnimatedMount';
+import PressableScale from '../../components/anim/PressableScale';
 
 // Example prompts by category
 const EXAMPLE_PROMPTS: Record<'coding' | 'studying', string[]> = {
@@ -162,7 +164,7 @@ export default function CreateChallengeScreen() {
           </Pressable>
           <Text style={styles.headerTitle}>NEW CHALLENGE</Text>
           <View style={styles.categoryToggle}>
-            <Pressable
+            <PressableScale
               style={[styles.categoryPill, category === 'coding' && styles.categoryPillActive]}
               onPress={() => handleCategoryChange('coding')}
             >
@@ -171,8 +173,8 @@ export default function CreateChallengeScreen() {
                 size={14}
                 color={category === 'coding' ? colors.background : colors.text}
               />
-            </Pressable>
-            <Pressable
+            </PressableScale>
+            <PressableScale
               style={[styles.categoryPill, category === 'studying' && styles.categoryPillActive]}
               onPress={() => handleCategoryChange('studying')}
             >
@@ -181,7 +183,7 @@ export default function CreateChallengeScreen() {
                 size={14}
                 color={category === 'studying' ? colors.background : colors.text}
               />
-            </Pressable>
+            </PressableScale>
           </View>
         </View>
 
@@ -191,7 +193,7 @@ export default function CreateChallengeScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Category Label */}
-          <View style={styles.categoryLabel}>
+          <AnimatedMount delay={0} style={styles.categoryLabel}>
             <Ionicons
               name={category === 'coding' ? 'logo-github' : 'book'}
               size={16}
@@ -200,7 +202,7 @@ export default function CreateChallengeScreen() {
             <Text style={styles.categoryText}>
               {category === 'coding' ? 'GitHub Coding Challenge' : 'Notion Study Challenge'}
             </Text>
-          </View>
+          </AnimatedMount>
 
           {/* Step 1: Challenge Prompt */}
           <View style={styles.section}>
@@ -396,15 +398,19 @@ export default function CreateChallengeScreen() {
 
         {/* Submit Button */}
         <View style={styles.footer}>
-          <Pressable
-            style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
+          <PressableScale
+            style={[
+              styles.submitButton,
+              canSubmit ? glow(colors.accent, 0.4) : null,
+              !canSubmit && styles.submitButtonDisabled,
+            ]}
             onPress={handleSubmit}
             disabled={!canSubmit || isLoading}
           >
             <Text style={[styles.submitText, !canSubmit && styles.submitTextDisabled]}>
               {isLoading ? 'CREATING...' : 'LOCK IT IN'}
             </Text>
-          </Pressable>
+          </PressableScale>
         </View>
       </KeyboardAvoidingView>
 

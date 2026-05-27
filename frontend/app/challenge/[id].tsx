@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { colors } from '../../lib/theme';
-import { Challenge, NotionPage, NotionActivity } from '../../lib/types';
+import { Challenge, NotionPage, NotionActivity, AiVerdict } from '../../lib/types';
 import {
   getChallenge,
   acceptChallenge,
@@ -21,10 +21,14 @@ import {
   evaluateChallenge,
   setChallengeNotionPage,
   pollChallengeNotion,
+  refreshChallengeProgress,
 } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import NotionPagePicker from '../../components/NotionPagePicker';
 import ChallengeResultPopup from '../../components/ChallengeResultPopup';
+import AnimatedMount from '../../components/anim/AnimatedMount';
+import PressableScale from '../../components/anim/PressableScale';
+import { motion, glow } from '../../lib/theme';
 
 export default function ChallengeDetailScreen() {
   const router = useRouter();
@@ -36,16 +40,25 @@ export default function ChallengeDetailScreen() {
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [showPagePicker, setShowPagePicker] = useState(false);
   const [isPollingNotion, setIsPollingNotion] = useState(false);
+  // Tracks the background GitHub/Notion refresh that runs after the page
+  // renders — drives the "Refreshing progress…" indicator on the progress card.
+  const [isRefreshingProgress, setIsRefreshingProgress] = useState(false);
   // For accepting studying challenges - opponent must select their page
   const [selectedAcceptPage, setSelectedAcceptPage] = useState<NotionPage | null>(null);
-  // Result popup
   const [showResultPopup, setShowResultPopup] = useState(false);
-  const [resultIsWin, setResultIsWin] = useState(false);
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
+    cancelledRef.current = false;
     if (user && id) {
-      loadChallenge();
+      // Render the page from cached DB state first (fast — no third-party
+      // fetches), then kick off a background refresh that will update the
+      // progress bar when GitHub/Notion respond.
+      loadChallenge().then(refreshProgressInBackground);
     }
+    return () => {
+      cancelledRef.current = true;
+    };
   }, [id, user]);
 
   const loadChallenge = async () => {
@@ -57,6 +70,21 @@ export default function ChallengeDetailScreen() {
       router.back();
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const refreshProgressInBackground = async () => {
+    if (!id) return;
+    // Only worth refreshing for active challenges — pending/completed/etc.
+    // have no live progress to update.
+    setIsRefreshingProgress(true);
+    try {
+      const { data } = await refreshChallengeProgress(parseInt(id));
+      if (!cancelledRef.current) setChallenge(data);
+    } catch {
+      // Best-effort: the page already rendered with cached data, so swallow.
+    } finally {
+      if (!cancelledRef.current) setIsRefreshingProgress(false);
     }
   };
 
@@ -162,39 +190,23 @@ export default function ChallengeDetailScreen() {
         {
           text: 'Evaluate',
           onPress: async () => {
+            // Fire-and-forget: kick off the background job on the server, then
+            // navigate home. The dashboard shows the challenge as EVALUATING
+            // until the AI finishes (no client-side polling — avoids client
+            // timeouts when Gemini + GitHub/Notion fetches run long).
             setIsEvaluating(true);
-            console.log('=== EVALUATE DEBUG START ===');
-            console.log('Challenge ID:', id);
-            console.log('Challenge object:', JSON.stringify(challenge, null, 2));
             try {
-              console.log('Calling evaluateChallenge...');
-              const response = await evaluateChallenge(parseInt(id!));
-              console.log('Success! Response:', JSON.stringify(response.data, null, 2));
-              setChallenge(response.data);
-
-              // Show result popup
-              const isWin = response.data.winner_id === user?.id;
-              setResultIsWin(isWin);
-              setShowResultPopup(true);
+              await evaluateChallenge(parseInt(id!));
+              if (cancelledRef.current) return;
+              router.replace('/(tabs)');
             } catch (error: any) {
-              console.log('=== EVALUATE ERROR ===');
-              console.log('Error object:', error);
-              console.log('Error message:', error.message);
-              console.log('Error response:', error.response);
-              console.log('Response status:', error.response?.status);
-              console.log('Response data:', JSON.stringify(error.response?.data, null, 2));
-              console.log('Response headers:', error.response?.headers);
-              console.log('Request config:', error.config);
-              console.log('=== EVALUATE ERROR END ===');
-
-              let message = error.response?.data?.detail || 'Evaluation failed';
-              if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-                message = 'Request timed out. The AI is still processing - please try again in a moment.';
-              }
-              Alert.alert('Error', `${message}\n\nStatus: ${error.response?.status || 'unknown'}\nCheck console for details.`);
+              if (cancelledRef.current) return;
+              const message =
+                error.response?.data?.detail || error.message || 'Evaluation failed';
+              Alert.alert('Error', message);
+              loadChallenge();
             } finally {
-              setIsEvaluating(false);
-              console.log('=== EVALUATE DEBUG END ===');
+              if (!cancelledRef.current) setIsEvaluating(false);
             }
           },
         },
@@ -232,75 +244,27 @@ export default function ChallengeDetailScreen() {
     return challenge.creator.username;
   };
 
-  // Parse personalized verdict from JSON and extract the right message for the current user
-  const getPersonalizedVerdict = (): string | null => {
-    if (!challenge?.ai_verdict) return null;
+  // The backend stores ai_verdict as a JSON-serialized AiVerdict.
+  // Return the personalized verdict for the current user, or a fallback.
+  const getPersonalizedVerdict = (): string => {
+    const fallback = 'Challenge evaluated by AI referee.';
+    if (!challenge?.ai_verdict) return fallback;
 
-    const rawVerdict = challenge.ai_verdict;
+    const raw: any = challenge.ai_verdict;
+    let parsed: Partial<AiVerdict> | null = null;
+    if (typeof raw === 'object') {
+      parsed = raw;
+    } else if (typeof raw === 'string') {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return raw.trim() || fallback;
+      }
+    }
+
+    if (!parsed) return fallback;
     const isCreator = challenge.creator.id === user?.id;
-    const verdictKey = isCreator ? 'creator_verdict' : 'opponent_verdict';
-
-    // Debug logging
-    console.log('=== VERDICT DEBUG ===');
-    console.log('rawVerdict type:', typeof rawVerdict);
-    console.log('rawVerdict value:', rawVerdict);
-    console.log('isCreator:', isCreator);
-    console.log('verdictKey:', verdictKey);
-
-    // Helper to extract verdict from an object
-    const extractFromObject = (obj: any): string | null => {
-      if (!obj || typeof obj !== 'object') {
-        console.log('extractFromObject: obj is not an object', typeof obj);
-        return null;
-      }
-      const verdict = obj[verdictKey] || obj.verdict;
-      console.log('extractFromObject: found verdict:', verdict);
-      return verdict && typeof verdict === 'string' ? verdict : null;
-    };
-
-    // If it's already an object (parsed by API client)
-    if (typeof rawVerdict === 'object' && rawVerdict !== null) {
-      console.log('Path: Already an object');
-      return extractFromObject(rawVerdict) || 'Challenge evaluated by AI referee.';
-    }
-
-    // If it's a string
-    if (typeof rawVerdict === 'string') {
-      const trimmed = rawVerdict.trim();
-      console.log('Path: String, trimmed starts with {:', trimmed.startsWith('{'));
-
-      // If it looks like JSON, try to parse it
-      if (trimmed.startsWith('{')) {
-        try {
-          const parsed = JSON.parse(trimmed);
-          console.log('JSON.parse succeeded:', parsed);
-          const result = extractFromObject(parsed);
-          console.log('extractFromObject result:', result);
-          return result || 'Challenge evaluated by AI referee.';
-        } catch (e) {
-          console.log('JSON.parse FAILED:', e);
-          // JSON parsing failed, try regex extraction
-          // Use a more robust regex that handles escaped characters
-          const regex = new RegExp(`"${verdictKey}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`);
-          const match = trimmed.match(regex);
-          if (match && match[1]) {
-            console.log('Regex matched:', match[1]);
-            // Unescape any escaped characters
-            return match[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
-          }
-          console.log('Regex also failed');
-          // If regex also failed, don't return raw JSON - return generic message
-          return 'Challenge evaluated by AI referee.';
-        }
-      }
-
-      // It's a plain text verdict (old format) - return as-is
-      console.log('Path: Plain text, returning trimmed');
-      return trimmed;
-    }
-
-    console.log('Path: Fallback');
-    return 'Challenge evaluated by AI referee.';
+    return (isCreator ? parsed.creator_verdict : parsed.opponent_verdict) || fallback;
   };
 
   const renderNotionActivityRow = (
@@ -401,15 +365,15 @@ export default function ChallengeDetailScreen() {
 
         {/* Challenge Prompt */}
         {challenge.challenge_prompt && (
-          <View style={styles.promptCard}>
+          <AnimatedMount delay={0} style={styles.promptCard}>
             <Text style={styles.promptLabel}>CHALLENGE</Text>
             <Text style={styles.promptText}>{challenge.challenge_prompt}</Text>
-          </View>
+          </AnimatedMount>
         )}
 
         {/* AI Verdict (for completed challenges) */}
         {isCompleted && challenge.ai_verdict && (
-          <View style={styles.verdictCard}>
+          <AnimatedMount delay={motion.stagger} translateY={20} style={[styles.verdictCard, glow(colors.accent, 0.25)]}>
             <View style={styles.verdictHeader}>
               <Ionicons name="shield-checkmark" size={24} color={colors.accent} />
               <Text style={styles.verdictTitle}>AI REFEREE VERDICT</Text>
@@ -442,7 +406,7 @@ export default function ChallengeDetailScreen() {
               </Text>
               <Text style={styles.verdictText}>{getPersonalizedVerdict()}</Text>
             </View>
-          </View>
+          </AnimatedMount>
         )}
 
         {/* Challenge Summary */}
@@ -540,7 +504,15 @@ export default function ChallengeDetailScreen() {
         {/* Progress (for coding challenges) */}
         {!isStudying && isActive && (
           <View style={styles.progressCard}>
-            <Text style={styles.progressTitle}>CURRENT PROGRESS</Text>
+            <View style={styles.progressHeader}>
+              <Text style={styles.progressTitle}>CURRENT PROGRESS</Text>
+              {isRefreshingProgress && (
+                <View style={styles.refreshingPill}>
+                  <ActivityIndicator size="small" color={colors.accent} />
+                  <Text style={styles.refreshingPillText}>Refreshing…</Text>
+                </View>
+              )}
+            </View>
             <View style={styles.progressRow}>
               <Text style={styles.progressLabel}>
                 @{challenge.creator.username} {challenge.creator.id === user?.id ? '(You)' : ''}
@@ -603,10 +575,10 @@ export default function ChallengeDetailScreen() {
             </View>
           )}
 
-          <Pressable
+          <PressableScale
             style={[
               styles.acceptButton,
-              isStudying && !selectedAcceptPage && styles.acceptButtonDisabled,
+              isStudying && !selectedAcceptPage ? styles.acceptButtonDisabled : glow(colors.accent, 0.4),
             ]}
             onPress={handleAccept}
             disabled={isActionLoading || (isStudying && !selectedAcceptPage)}
@@ -619,14 +591,14 @@ export default function ChallengeDetailScreen() {
             >
               {isActionLoading ? 'PROCESSING...' : 'ACCEPT CHALLENGE'}
             </Text>
-          </Pressable>
-          <Pressable
+          </PressableScale>
+          <PressableScale
             style={styles.declineButton}
             onPress={handleDecline}
             disabled={isActionLoading}
           >
             <Text style={styles.declineText}>DECLINE</Text>
-          </Pressable>
+          </PressableScale>
         </View>
       )}
 
@@ -638,7 +610,7 @@ export default function ChallengeDetailScreen() {
               Waiting for @{challenge.opponent?.username || 'opponent'} to respond
             </Text>
           </View>
-          <Pressable
+          <PressableScale
             style={styles.cancelButton}
             onPress={handleCancel}
             disabled={isActionLoading}
@@ -646,7 +618,7 @@ export default function ChallengeDetailScreen() {
             <Text style={styles.cancelText}>
               {isActionLoading ? 'CANCELLING...' : 'CANCEL CHALLENGE'}
             </Text>
-          </Pressable>
+          </PressableScale>
           <Text style={styles.cancelHint}>
             Your stake will be refunded
           </Text>
@@ -655,8 +627,8 @@ export default function ChallengeDetailScreen() {
 
       {canEvaluate && (
         <View style={styles.footer}>
-          <Pressable
-            style={styles.evaluateButton}
+          <PressableScale
+            style={[styles.evaluateButton, glow(colors.accent, 0.45)]}
             onPress={handleEvaluate}
             disabled={isEvaluating}
           >
@@ -668,7 +640,7 @@ export default function ChallengeDetailScreen() {
                 <Text style={styles.evaluateText}>REQUEST AI EVALUATION</Text>
               </>
             )}
-          </Pressable>
+          </PressableScale>
           <Text style={styles.evaluateHint}>
             This will end the challenge and determine a winner
           </Text>
@@ -691,10 +663,9 @@ export default function ChallengeDetailScreen() {
         selectedPageId={isPending && isOpponent ? selectedAcceptPage?.id : myNotionPageId}
       />
 
-      {/* Result Popup */}
       <ChallengeResultPopup
         visible={showResultPopup}
-        isWin={resultIsWin}
+        isWin={challenge?.winner_id === user?.id}
         amount={challenge?.stake_cents || 0}
         onDismiss={() => setShowResultPopup(false)}
       />
@@ -706,6 +677,8 @@ const getStatusColor = (status: string) => {
   switch (status) {
     case 'active':
       return colors.accent;
+    case 'evaluating':
+      return '#f59e0b';
     case 'completed':
       return '#3b82f6';
     case 'declined':
@@ -914,6 +887,26 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1,
     marginBottom: 12,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  refreshingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 12,
+  },
+  refreshingPillText: {
+    color: colors.accent,
+    fontSize: 11,
+    fontWeight: '600',
   },
   progressRow: {
     flexDirection: 'row',

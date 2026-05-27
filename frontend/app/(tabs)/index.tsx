@@ -1,13 +1,15 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { colors } from '../../lib/theme';
+import { colors, motion, glow } from '../../lib/theme';
 import { Challenge } from '../../lib/types';
 import { getActiveChallenges, getPendingChallenges, getChallenges } from '../../lib/api';
 import ChallengeCard from '../../components/ChallengeCard';
+import AnimatedMount from '../../components/anim/AnimatedMount';
+import PressableScale from '../../components/anim/PressableScale';
 import { useAuth } from '../../lib/auth';
 
 export default function DashboardScreen() {
@@ -49,6 +51,16 @@ export default function DashboardScreen() {
     }, [loadData])
   );
 
+  // Auto-refresh every 8s while any challenge is being AI-evaluated, so the
+  // dashboard flips from EVALUATING → WON/LOST without a manual pull-to-refresh.
+  // Stops as soon as no evaluating challenges remain.
+  useEffect(() => {
+    const hasEvaluating = activeChallenges.some((c) => c.status === 'evaluating');
+    if (!hasEvaluating) return;
+    const interval = setInterval(loadData, 8000);
+    return () => clearInterval(interval);
+  }, [activeChallenges, loadData]);
+
   const onRefresh = () => {
     setIsRefreshing(true);
     loadData();
@@ -79,15 +91,17 @@ export default function DashboardScreen() {
 
         {/* Pending Challenges Banner */}
         {pendingCount > 0 && (
-          <Pressable style={styles.pendingBanner} onPress={() => router.push('/challenge/pending')}>
-            <View style={styles.pendingContent}>
-              <Ionicons name="mail" size={20} color={colors.accent} />
-              <Text style={styles.pendingText}>
-                {pendingCount} pending challenge{pendingCount > 1 ? 's' : ''}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.accent} />
-          </Pressable>
+          <AnimatedMount delay={0}>
+            <PressableScale style={styles.pendingBanner} onPress={() => router.push('/challenge/pending')}>
+              <View style={styles.pendingContent}>
+                <Ionicons name="mail" size={20} color={colors.accent} />
+                <Text style={styles.pendingText}>
+                  {pendingCount} pending challenge{pendingCount > 1 ? 's' : ''}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.accent} />
+            </PressableScale>
+          </AnimatedMount>
         )}
 
         <View style={styles.section}>
@@ -99,13 +113,14 @@ export default function DashboardScreen() {
                 <Text style={styles.sectionTitle}>SENT CHALLENGES</Text>
                 <Text style={styles.sectionSubtitle}>(awaiting acceptance)</Text>
               </View>
-              {outgoingPending.map((challenge) => (
-                <ChallengeCard
-                  key={challenge.id}
-                  challenge={challenge}
-                  currentUserId={user?.id || 0}
-                  onPress={() => handleChallengePress(challenge)}
-                />
+              {outgoingPending.map((challenge, index) => (
+                <AnimatedMount key={challenge.id} delay={index * motion.stagger}>
+                  <ChallengeCard
+                    challenge={challenge}
+                    currentUserId={user?.id || 0}
+                    onPress={() => handleChallengePress(challenge)}
+                  />
+                </AnimatedMount>
               ))}
               <View style={styles.sectionSpacer} />
             </>
@@ -120,22 +135,23 @@ export default function DashboardScreen() {
           {activeChallenges.length === 0 ? (
             <Text style={styles.empty}>No active challenges</Text>
           ) : (
-            activeChallenges.map((challenge) => (
-              <ChallengeCard
-                key={challenge.id}
-                challenge={challenge}
-                currentUserId={user?.id || 0}
-                onPress={() => handleChallengePress(challenge)}
-              />
+            activeChallenges.map((challenge, index) => (
+              <AnimatedMount key={challenge.id} delay={index * motion.stagger}>
+                <ChallengeCard
+                  challenge={challenge}
+                  currentUserId={user?.id || 0}
+                  onPress={() => handleChallengePress(challenge)}
+                />
+              </AnimatedMount>
             ))
           )}
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
-        <Pressable style={styles.button} onPress={() => router.push('/challenge/create')}>
+        <PressableScale style={[styles.button, glow(colors.accent, 0.4)]} onPress={() => router.push('/challenge/create')}>
           <Text style={styles.buttonText}>START NEW CHALLENGE</Text>
-        </Pressable>
+        </PressableScale>
       </View>
     </SafeAreaView>
   );

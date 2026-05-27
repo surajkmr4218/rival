@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/auth';
-import { colors } from '../lib/theme';
+import { colors, motion } from '../lib/theme';
+import AnimatedMount from '../components/anim/AnimatedMount';
 
 export default function LoginScreen() {
   const { login, register, isLoading, error } = useAuth();
@@ -68,16 +69,18 @@ export default function LoginScreen() {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.logoBox}>
-          <Ionicons name="trophy" size={40} color={colors.accent} />
-        </View>
+        <AnimatedMount delay={0} translateY={16}>
+          <View style={styles.logoBox}>
+            <Ionicons name="trophy" size={40} color={colors.accent} />
+          </View>
 
-        <Text style={styles.title}>RIVAL</Text>
-        <Text style={styles.subtitle}>HIGH STAKES PRODUCTIVITY</Text>
+          <Text style={styles.title}>RIVAL</Text>
+          <Text style={styles.subtitle}>HIGH STAKES PRODUCTIVITY</Text>
+        </AnimatedMount>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <View style={styles.toggle}>
+        <AnimatedMount delay={motion.stagger} style={styles.toggle}>
           <Pressable
             style={[styles.toggleBtn, !isSignUp && styles.toggleBtnActive]}
             onPress={switchToSignIn}
@@ -94,9 +97,9 @@ export default function LoginScreen() {
               Sign Up
             </Text>
           </Pressable>
-        </View>
+        </AnimatedMount>
 
-        <View style={styles.form}>
+        <AnimatedMount delay={motion.stagger * 2} style={styles.form}>
           <Text style={styles.label}>Email</Text>
           <TextInput
             style={styles.input}
@@ -168,7 +171,7 @@ export default function LoginScreen() {
               </Text>
             )}
           </Pressable>
-        </View>
+        </AnimatedMount>
 
         <Text style={styles.footer}>WAGER RESPONSIBLY</Text>
       </ScrollView>

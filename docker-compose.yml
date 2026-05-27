@@ -2,9 +2,9 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: rival
-      POSTGRES_PASSWORD: rival
-      POSTGRES_DB: rival
+      POSTGRES_USER: ${POSTGRES_USER:-rival}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rival}
+      POSTGRES_DB: ${POSTGRES_DB:-rival}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -22,7 +22,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      DATABASE_URL: postgresql://rival:rival@db:5432/rival
+      DATABASE_URL: postgresql://${POSTGRES_USER:-rival}:${POSTGRES_PASSWORD:-rival}@db:5432/${POSTGRES_DB:-rival}
       DB_HOST: db
       DB_PORT: 5432
       SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
