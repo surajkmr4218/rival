@@ -5,6 +5,11 @@ from typing import Optional
 GITHUB_API_BASE = "https://api.github.com"
 DEFAULT_TIMEOUT = 30.0
 
+# Cap how many of the user's most-recently-pushed repos we crawl. Keeps
+# Gemini's prompt small enough for the free tier (was hitting "Quota exceeded
+# for metric"), and limits GitHub API calls so we don't trip rate limits either.
+MAX_REPOS_PER_FETCH = 5
+
 
 class GitHubClient:
     """Client for interacting with GitHub API."""
@@ -49,7 +54,7 @@ class GitHubClient:
             repos = repos_response.json()
 
             # Check commits in each repo
-            for repo in repos[:20]:  # Limit to 20 most recently pushed repos
+            for repo in repos[:MAX_REPOS_PER_FETCH]:
                 repo_name = repo["full_name"]
 
                 try:
@@ -106,8 +111,9 @@ class GitHubClient:
             # Get user's repos (sorted by recent activity)
             repos = await self._fetch_user_repos(client)
 
-            # Fetch activity from each repo (limit to 15 most active)
-            for repo in repos[:15]:
+            # Fetch activity from each repo — capped so Gemini's prompt stays
+            # under the free-tier token limit and GitHub doesn't rate-limit us.
+            for repo in repos[:MAX_REPOS_PER_FETCH]:
                 repo_name = repo["full_name"]
 
                 # Get commits with details

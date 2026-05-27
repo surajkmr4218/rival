@@ -127,12 +127,15 @@ def list_pending(
 def list_active(
     db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
+    # Include EVALUATING so the dashboard shows in-flight challenges with a
+    # "waiting for AI referee" indicator instead of having them disappear.
+    in_progress_statuses = (ChallengeStatus.ACTIVE, ChallengeStatus.EVALUATING)
     challenges = (
         db.query(Challenge)
         .filter(
             (Challenge.creator_id == current_user.id)
             | (Challenge.opponent_id == current_user.id),
-            Challenge.status == ChallengeStatus.ACTIVE,
+            Challenge.status.in_(in_progress_statuses),
         )
         .order_by(Challenge.created_at.desc())
         .all()
@@ -141,13 +144,21 @@ def list_active(
 
 
 @router.get("/{challenge_id}", response_model=ChallengeResponse)
-async def get_challenge(
+def get_challenge(
     challenge_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """
+    Returns the challenge as currently stored in the DB — does NOT trigger
+    a GitHub/Notion fetch. That kept the detail screen blocked for seconds
+    waiting on third-party APIs.
+
+    The frontend should call `POST /{challenge_id}/refresh` separately after
+    rendering, so the page paints instantly with cached progress and the
+    progress bar updates when the fresh fetch returns.
+    """
     challenge = _load_challenge(db, challenge_id, current_user)
-    await challenge_service.refresh_progress(challenge, db)
     return _to_response(challenge)
 
 

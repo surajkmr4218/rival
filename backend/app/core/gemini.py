@@ -3,12 +3,69 @@ Gemini AI Referee for evaluating challenges.
 
 This module handles all AI-powered challenge evaluation logic for both
 GitHub (coding) and Notion (studying) challenges.
+
+Quota strategy: each Gemini model has its OWN per-day free-tier bucket, so when
+the primary runs dry we transparently fall back to lighter models that still
+have headroom. Within each model we also retry transient 429s, respecting the
+`retry_delay` the API hands us.
 """
 
+import asyncio
 import json
-import google.generativeai as genai
+import logging
+import re
 from typing import Optional
+
+import google.generativeai as genai
+from google.api_core.exceptions import GoogleAPICallError, ResourceExhausted
+
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+# Ordered fallback chain: try the primary model first; on quota errors, walk
+# down to lighter siblings that have their own separate free-tier allowances.
+# `settings.GEMINI_MODEL` is the first attempt — anything else after dedupes.
+def _build_model_chain(primary: str) -> list[str]:
+    fallbacks = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash-lite"]
+    seen: set[str] = set()
+    chain: list[str] = []
+    for name in [primary, *fallbacks]:
+        if name and name not in seen:
+            seen.add(name)
+            chain.append(name)
+    return chain
+
+
+_MAX_ATTEMPTS_PER_MODEL = 2          # retry transient 429s within a model
+_FALLBACK_RETRY_DELAY_SECONDS = 5.0  # used if the API doesn't suggest one
+
+
+class GeminiQuotaExhausted(Exception):
+    """All models in the fallback chain are quota-exhausted / rate-limited."""
+
+
+def _extract_retry_delay(exc: ResourceExhausted) -> Optional[float]:
+    """
+    Pull the suggested retry delay (seconds) out of a 429 error.
+
+    Gemini's `ResourceExhausted` includes a `RetryInfo` proto in `details()`
+    with a `retry_delay` Duration; if for any reason that's missing we fall
+    back to parsing the human-readable "Please retry in X.Ys" line.
+    """
+    try:
+        for detail in exc.details():
+            retry_info = getattr(detail, "retry_delay", None)
+            if retry_info is not None:
+                return retry_info.seconds + retry_info.nanos / 1e9
+    except Exception:
+        pass
+
+    match = re.search(r"retry in ([\d.]+)s", str(exc), re.IGNORECASE)
+    if match:
+        return float(match.group(1))
+    return None
 
 
 # Base rules shared by all referee prompts (DRY)
@@ -75,21 +132,68 @@ REFEREE_SYSTEM_PROMPT = CODING_REFEREE_PROMPT
 
 
 class GeminiReferee:
-    """AI Referee that evaluates challenges using Gemini."""
+    """AI Referee that evaluates challenges using Gemini, with model fallback."""
 
     def __init__(self):
         if not settings.GEMINI_API_KEY:
             raise ValueError("GEMINI_API_KEY not configured")
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        self.model = genai.GenerativeModel("gemini-2.0-flash")
+        self._model_chain = _build_model_chain(settings.GEMINI_MODEL)
 
     async def _evaluate(self, system_prompt: str, user_prompt: str) -> dict:
-        """Common evaluation logic - generates content and parses JSON response."""
-        response = await self.model.generate_content_async(
-            [system_prompt, user_prompt],
-            generation_config={"response_mime_type": "application/json"},
+        """
+        Call Gemini with one prompt, walking the fallback chain on quota errors.
+
+        For each model: try up to `_MAX_ATTEMPTS_PER_MODEL` times, sleeping the
+        delay the API requests between tries. If still rate-limited, drop to
+        the next (lighter) model — it has its own daily quota bucket.
+
+        Raises `GeminiQuotaExhausted` only when every model in the chain has
+        been rate-limited. Other errors (auth, bad request, etc.) are not
+        swallowed — they bubble up unchanged.
+        """
+        last_error: Optional[Exception] = None
+        generation_config = {"response_mime_type": "application/json"}
+
+        for model_name in self._model_chain:
+            model = genai.GenerativeModel(model_name)
+
+            for attempt in range(1, _MAX_ATTEMPTS_PER_MODEL + 1):
+                try:
+                    response = await model.generate_content_async(
+                        [system_prompt, user_prompt],
+                        generation_config=generation_config,
+                    )
+                    if model_name != self._model_chain[0]:
+                        logger.info("Gemini evaluation succeeded on fallback model %s", model_name)
+                    return json.loads(response.text)
+
+                except ResourceExhausted as e:
+                    last_error = e
+                    is_last_attempt = attempt == _MAX_ATTEMPTS_PER_MODEL
+                    if is_last_attempt:
+                        logger.warning(
+                            "Gemini %s exhausted after %d attempts; falling back",
+                            model_name, attempt,
+                        )
+                        break  # move to next model in chain
+                    delay = _extract_retry_delay(e) or _FALLBACK_RETRY_DELAY_SECONDS
+                    logger.warning(
+                        "Gemini %s rate-limited (attempt %d/%d); retrying in %.1fs",
+                        model_name, attempt, _MAX_ATTEMPTS_PER_MODEL, delay,
+                    )
+                    await asyncio.sleep(delay)
+
+                except GoogleAPICallError:
+                    # Non-quota Google error (auth, invalid arg, etc.) — don't
+                    # retry, don't fall back: this is unlikely to fix itself.
+                    raise
+
+        raise GeminiQuotaExhausted(
+            "All Gemini models are rate-limited or out of free-tier quota. "
+            "Try again in a few minutes or set GEMINI_MODEL to another model. "
+            f"Last error: {last_error}"
         )
-        return json.loads(response.text)
 
     async def evaluate_challenge(
         self,

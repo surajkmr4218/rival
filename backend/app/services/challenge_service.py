@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.clock import utcnow
 from app.core.database import SessionLocal
-from app.core.gemini import get_referee
+from app.core.gemini import GeminiQuotaExhausted, get_referee
 from app.core.github import GitHubClient
 from app.core.notion import NotionClient
 from app.models.balance_history import BalanceEventType
@@ -406,17 +406,36 @@ async def run_evaluation(challenge_id: int) -> None:
         _finalize_evaluation(db, challenge, verdict)
         db.commit()
         logger.info(f"Challenge {challenge_id} evaluated: winner_id={challenge.winner_id}")
+    except GeminiQuotaExhausted as e:
+        # Don't dump a stack trace for this — it's an expected operational
+        # condition. The challenge rolls back to ACTIVE so the user can retry.
+        logger.warning(
+            f"Evaluation for challenge {challenge_id} aborted — Gemini quota exhausted: {e}"
+        )
+        _safe_rollback_to_active(db, challenge_id)
     except Exception as e:
         logger.exception(f"Evaluation failed for challenge {challenge_id}: {e}")
-        if db is not None:
-            db.rollback()
-            challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
-            if challenge and challenge.status == ChallengeStatus.EVALUATING:
-                challenge.status = ChallengeStatus.ACTIVE
-                db.commit()
+        _safe_rollback_to_active(db, challenge_id)
     finally:
         if db is not None:
             db.close()
+
+
+def _safe_rollback_to_active(db: Session | None, challenge_id: int) -> None:
+    """Best-effort: revert a stuck EVALUATING challenge back to ACTIVE so the
+    user can retry. Swallows secondary errors so the original failure surfaces."""
+    if db is None:
+        return
+    try:
+        db.rollback()
+        challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
+        if challenge and challenge.status == ChallengeStatus.EVALUATING:
+            challenge.status = ChallengeStatus.ACTIVE
+            db.commit()
+    except Exception:
+        logger.exception(
+            "Failed to rollback challenge %s status after evaluation error", challenge_id
+        )
 
 
 async def _evaluate_coding(challenge: Challenge, referee, since: datetime) -> dict:
