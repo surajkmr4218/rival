@@ -20,6 +20,22 @@
 
 ---
 
+## 📱 Screenshots
+
+<div align="center">
+
+| Home | Create Challenge | Balance Graph |
+|:---:|:---:|:---:|
+| <img src="ui-images/home.PNG" width="240"/> | <img src="ui-images/create_challenge.PNG" width="240"/> | <img src="ui-images/graph.PNG" width="240"/> |
+
+| AI Verdict | Challenge History |
+|:---:|:---:|
+| <img src="ui-images/challenge_outcome.PNG" width="240"/> | <img src="ui-images/challenge_history.PNG" width="240"/> |
+
+</div>
+
+---
+
 ## 📖 Overview
 
 Most productivity apps rely on streaks and badges. Rival adds the a better incentive: **money on the line, head-to-head against a real opponent.**
@@ -56,6 +72,31 @@ Two players agree on a goal ("Make 5+ meaningful commits in 24h", "Take notes on
 | **AI** | Google Gemini 2.0 Flash (`google-generativeai`) |
 | **Integrations** | GitHub OAuth + REST · Notion OAuth + API · `httpx` async client |
 | **Security / Infra** | PyJWT · bcrypt · `slowapi` rate limiting · CORS middleware |
+
+---
+
+## 🚀 Run Locally
+
+**Backend** — needs [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
+```bash
+# from repo root (backend/.env must exist with your secrets)
+docker compose up --build
+```
+
+Starts Postgres + the API on `http://localhost:8000` (migrations run automatically).
+
+**Frontend** — install the **Expo Go** app on your phone.
+
+```bash
+cd frontend
+npm install
+# point the app at your machine's LAN IP (run `ipconfig getifaddr en0`)
+echo "EXPO_PUBLIC_BACKEND_URL=http://<your-ip>:8000" > .env.local
+npx expo start
+```
+
+Scan the QR code with Expo Go (phone and computer on the same Wi-Fi).
 
 ---
 
