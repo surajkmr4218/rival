@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import Svg, { Path, Line, Circle, G, Text as SvgText, Defs, ClipPath, Rect } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../lib/theme';
+import { colors, radius, type, elevation } from '../lib/theme';
 import { getBalanceHistory } from '../lib/api';
 import type { BalanceHistoryResponse, BalanceHistoryPeriod, BalanceDataPoint } from '../lib/types';
 
@@ -176,7 +176,7 @@ export default function BalanceChart({ refreshTrigger }: BalanceChartProps) {
   };
 
   const isPositive = data ? data.change_cents >= 0 : true;
-  const lineColor = isPositive ? colors.accent : '#ef4444';
+  const lineColor = isPositive ? colors.accent : colors.loss;
   const activePoint = activeIndex !== null ? chartData.points[activeIndex] : null;
 
   return (
@@ -184,6 +184,8 @@ export default function BalanceChart({ refreshTrigger }: BalanceChartProps) {
       style={styles.container}
       onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}
     >
+      <Text style={styles.cardEyebrow}>BALANCE HISTORY</Text>
+
       {/* Period Selector */}
       <View style={styles.periodSelector}>
         {PERIODS.map((p) => (
@@ -435,12 +437,18 @@ function getPeriodLabel(period: BalanceHistoryPeriod): string {
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: radius.lg,
     padding: 16,
     marginTop: 16,
+    ...elevation(1),
+  },
+  cardEyebrow: {
+    color: colors.textSecondary,
+    ...type.overline,
+    marginBottom: 12,
   },
   periodSelector: {
     flexDirection: 'row',
@@ -537,6 +545,7 @@ const styles = StyleSheet.create({
   changeAmount: {
     fontSize: 16,
     fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   changePercent: {
     fontSize: 14,

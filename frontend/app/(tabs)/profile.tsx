@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, RefreshControl, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Alert, RefreshControl, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import AnimatedMount from '../../components/anim/AnimatedMount';
@@ -8,7 +8,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../lib/auth';
-import { colors, motion, glow } from '../../lib/theme';
+import { colors, motion, space, radius, type, glow, elevation } from '../../lib/theme';
 import {
   getGitHubStatus,
   getGitHubOAuthUrl,
@@ -25,6 +25,9 @@ import {
 import type { NotionStatus, UserStats } from '../../lib/types';
 import TopUpDrawer from '../../components/TopUpDrawer';
 import BalanceChart from '../../components/BalanceChart';
+import ScreenBackground from '../../components/ui/ScreenBackground';
+import Gradient from '../../components/ui/Gradient';
+import SectionHeader from '../../components/ui/SectionHeader';
 
 interface GitHubStatus {
   connected: boolean;
@@ -52,12 +55,9 @@ export default function ProfileScreen() {
   const fetchStatuses = useCallback(async () => {
     if (!user) return;
 
-    // Fetch user balance
     try {
       const response = await getMe();
       setBalance(response.data.balance_cents);
-
-      // Show top-up for new users with 0 balance (only if they haven't already topped up this session)
       if (response.data.balance_cents === 0 && !hasCompletedTopUp) {
         setShowNewUserTopUp(true);
       }
@@ -65,12 +65,10 @@ export default function ProfileScreen() {
       console.error('Failed to fetch user:', error);
     }
 
-    // Fetch stats
     try {
       const response = await getUserStats();
       setStats(response.data);
     } catch (error) {
-      // Stats endpoint might not exist yet, use defaults
       setStats({
         challenges_won: 0,
         challenges_lost: 0,
@@ -80,7 +78,6 @@ export default function ProfileScreen() {
       });
     }
 
-    // Fetch GitHub status
     try {
       const response = await getGitHubStatus();
       setGithubStatus({
@@ -93,7 +90,6 @@ export default function ProfileScreen() {
       setIsLoadingGitHub(false);
     }
 
-    // Fetch Notion status
     try {
       const response = await getNotionStatus();
       setNotionStatus(response.data);
@@ -122,24 +118,17 @@ export default function ProfileScreen() {
       await addBalance(amountCents);
       setBalance((prev) => prev + amountCents);
     } catch (error) {
-      // For demo, just update locally
       setBalance((prev) => prev + amountCents);
     }
     setHasCompletedTopUp(true);
     setShowTopUp(false);
     setShowNewUserTopUp(false);
-    // Refresh chart after balance change
     setChartRefreshTrigger((prev) => prev + 1);
   };
 
   const handleConnectGitHub = async () => {
     setIsConnectingGitHub(true);
     try {
-      // GitHub OAuth Apps don't accept custom URI schemes — the backend
-      // (GITHUB_REDIRECT_URI) is registered with GitHub and relays the user
-      // back into the app via this deep link. `makeRedirectUri` returns the
-      // RIGHT scheme for the current environment automatically: `exp://...`
-      // in Expo Go, `rival://...` in a real (dev or production) build.
       const appReturnUrl = AuthSession.makeRedirectUri({ scheme: 'rival', path: 'auth/github' });
       const oauthResponse = await getGitHubOAuthUrl(appReturnUrl);
       const result = await WebBrowser.openAuthSessionAsync(oauthResponse.data.url, appReturnUrl);
@@ -148,12 +137,10 @@ export default function ProfileScreen() {
         const url = new URL(result.url);
         const code = url.searchParams.get('code');
         const error = url.searchParams.get('error');
-
         if (error) {
           Alert.alert('Error', 'GitHub authorization was denied');
           return;
         }
-
         if (code) {
           const response = await connectGitHub(code);
           setGithubStatus({ connected: true, username: response.data.github_username });
@@ -187,12 +174,10 @@ export default function ProfileScreen() {
         const url = new URL(result.url);
         const code = url.searchParams.get('code');
         const error = url.searchParams.get('error');
-
         if (error) {
           Alert.alert('Error', 'Notion authorization was denied');
           return;
         }
-
         if (code) {
           const response = await connectNotion(code);
           setNotionStatus({
@@ -219,9 +204,34 @@ export default function ProfileScreen() {
     }
   };
 
+  const StatTile = ({
+    icon,
+    value,
+    label,
+    color = colors.text,
+    tint = colors.accentSoft,
+    iconColor = colors.accent,
+  }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    value: string | number;
+    label: string;
+    color?: string;
+    tint?: string;
+    iconColor?: string;
+  }) => (
+    <View style={styles.statTile}>
+      <View style={[styles.statIcon, { backgroundColor: tint }]}>
+        <Ionicons name={icon} size={16} color={iconColor} />
+      </View>
+      <Text style={[styles.statValue, { color }]}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+
   const IntegrationCard = ({
     icon,
     title,
+    subtitle,
     isLoading,
     isConnected,
     connectedLabel,
@@ -231,6 +241,7 @@ export default function ProfileScreen() {
   }: {
     icon: keyof typeof Ionicons.glyphMap;
     title: string;
+    subtitle: string;
     isLoading: boolean;
     isConnected: boolean;
     connectedLabel: string;
@@ -238,33 +249,40 @@ export default function ProfileScreen() {
     onConnect: () => void;
     onDisconnect: () => void;
   }) => (
-    <View style={styles.sectionCard}>
-      <View style={styles.sectionHeader}>
-        <Ionicons name={icon} size={24} color={colors.text} />
-        <Text style={styles.sectionTitle}>{title}</Text>
+    <View style={[styles.integrationCard, isConnected && styles.integrationConnected]}>
+      <View style={styles.integrationLeft}>
+        <View style={[styles.integrationIcon, isConnected && { backgroundColor: colors.accentSoft }]}>
+          <Ionicons name={icon} size={22} color={isConnected ? colors.accent : colors.text} />
+        </View>
+        <View style={styles.integrationText}>
+          <Text style={styles.integrationTitle}>{title}</Text>
+          {isLoading ? (
+            <Text style={styles.integrationSub}>Checking…</Text>
+          ) : isConnected ? (
+            <View style={styles.integrationStatusRow}>
+              <Ionicons name="checkmark-circle" size={13} color={colors.accent} />
+              <Text style={[styles.integrationSub, { color: colors.accent }]} numberOfLines={1}>
+                {connectedLabel}
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.integrationSub}>{subtitle}</Text>
+          )}
+        </View>
       </View>
 
       {isLoading ? (
         <ActivityIndicator color={colors.accent} />
       ) : isConnected ? (
-        <View style={styles.connectedRow}>
-          <View style={styles.connectedInfo}>
-            <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
-            <Text style={styles.connectedText}>{connectedLabel}</Text>
-          </View>
-          <PressableScale style={styles.disconnectBtn} onPress={onDisconnect}>
-            <Text style={styles.disconnectText}>Disconnect</Text>
-          </PressableScale>
-        </View>
+        <PressableScale style={styles.disconnectBtn} onPress={onDisconnect}>
+          <Text style={styles.disconnectText}>Disconnect</Text>
+        </PressableScale>
       ) : (
         <PressableScale style={styles.connectBtn} onPress={onConnect} disabled={isConnecting}>
           {isConnecting ? (
-            <ActivityIndicator color={colors.background} size="small" />
+            <ActivityIndicator color={colors.accent} size="small" />
           ) : (
-            <>
-              <Ionicons name="link" size={18} color={colors.background} />
-              <Text style={styles.connectText}>Connect {title}</Text>
-            </>
+            <Text style={styles.connectText}>Connect</Text>
           )}
         </PressableScale>
       )}
@@ -272,292 +290,284 @@ export default function ProfileScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.accent} />
-        }
-      >
-        <Ionicons name="person-circle" size={80} color={colors.accent} />
-
-        <Text style={styles.username}>@{user?.username}</Text>
-        <Text style={styles.email}>{user?.email}</Text>
-
-        {/* Balance Card */}
-        <AnimatedMount delay={0} style={[styles.balanceCard, glow(colors.accent, 0.22)]}>
-          <Text style={styles.balanceLabel}>BALANCE</Text>
-          <Text style={styles.balanceValue}>{formatBalance(balance)}</Text>
-          <PressableScale style={styles.addFundsBtn} onPress={() => setShowTopUp(true)}>
-            <Ionicons name="add-circle" size={20} color={colors.background} />
-            <Text style={styles.addFundsText}>Add Funds</Text>
-          </PressableScale>
-        </AnimatedMount>
-
-        {/* Balance History Chart */}
-        <AnimatedMount delay={motion.stagger} style={styles.fullWidth}>
-          <BalanceChart refreshTrigger={chartRefreshTrigger} />
-        </AnimatedMount>
-
-        {/* Stats Section */}
-        {stats && (
-          <AnimatedMount delay={motion.stagger * 2} style={styles.statsCard}>
-            <Text style={styles.statsTitle}>YOUR STATS</Text>
-            <View style={styles.statsGrid}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.challenges_won}</Text>
-                <Text style={styles.statLabel}>Won</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.challenges_lost}</Text>
-                <Text style={styles.statLabel}>Lost</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, styles.statValueAccent]}>
-                  {formatBalance(stats.total_earnings_cents)}
-                </Text>
-                <Text style={styles.statLabel}>Earnings</Text>
+    <View style={styles.root}>
+      <ScreenBackground />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Identity */}
+          <AnimatedMount delay={0} style={styles.identity}>
+            <View style={styles.avatarRing}>
+              <View style={styles.avatar}>
+                <Ionicons name="person" size={34} color={colors.accent} />
               </View>
             </View>
-            <View style={styles.statsRow}>
-              <View style={styles.statItemWide}>
-                <Ionicons name="flame" size={20} color={colors.accent} />
-                <Text style={styles.statValue}>{stats.current_streak}</Text>
-                <Text style={styles.statLabel}>Streak</Text>
-              </View>
-              <View style={styles.statItemWide}>
-                <Ionicons name="trending-up" size={20} color={colors.accent} />
-                <Text style={styles.statValue}>{Math.round(stats.win_rate * 100)}%</Text>
-                <Text style={styles.statLabel}>Win Rate</Text>
-              </View>
-            </View>
+            <Text style={styles.username}>@{user?.username}</Text>
+            <Text style={styles.email}>{user?.email}</Text>
           </AnimatedMount>
-        )}
 
-        {/* GitHub Integration */}
-        <AnimatedMount delay={motion.stagger * 3} style={styles.fullWidth}>
-          <IntegrationCard
-            icon="logo-github"
-            title="GitHub"
-            isLoading={isLoadingGitHub}
-            isConnected={githubStatus.connected}
-            connectedLabel={`@${githubStatus.username}`}
-            isConnecting={isConnectingGitHub}
-            onConnect={handleConnectGitHub}
-            onDisconnect={handleDisconnectGitHub}
-          />
-        </AnimatedMount>
+          {/* Balance hero */}
+          <AnimatedMount delay={motion.stagger} style={styles.fullWidth}>
+            <Gradient
+              colors={['#1c2e4a', '#103a2a']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              radius={radius.xl}
+              style={[styles.balanceCard, elevation(2)]}
+            >
+              <View style={styles.balanceTop}>
+                <View>
+                  <Text style={styles.balanceLabel}>AVAILABLE BALANCE</Text>
+                  <Text style={styles.balanceValue}>{formatBalance(balance)}</Text>
+                </View>
+                <View style={styles.walletChip}>
+                  <Ionicons name="wallet" size={20} color={colors.secondary} />
+                </View>
+              </View>
+              <PressableScale
+                style={[styles.addFundsBtn, glow(colors.accent, 0.35)]}
+                onPress={() => setShowTopUp(true)}
+              >
+                <Ionicons name="add-circle" size={18} color="#04231a" />
+                <Text style={styles.addFundsText}>Add Funds</Text>
+              </PressableScale>
+            </Gradient>
+          </AnimatedMount>
 
-        {/* Notion Integration */}
-        <AnimatedMount delay={motion.stagger * 4} style={styles.fullWidth}>
-          <IntegrationCard
-            icon="book"
-            title="Notion"
-            isLoading={isLoadingNotion}
-            isConnected={notionStatus.connected}
-            connectedLabel={notionStatus.workspace_name || 'Connected'}
-            isConnecting={isConnectingNotion}
-            onConnect={handleConnectNotion}
-            onDisconnect={handleDisconnectNotion}
-          />
-        </AnimatedMount>
+          {/* Balance history chart */}
+          <AnimatedMount delay={motion.stagger * 2} style={styles.fullWidth}>
+            <BalanceChart refreshTrigger={chartRefreshTrigger} />
+          </AnimatedMount>
 
-        <PressableScale style={styles.logoutBtn} onPress={logout}>
-          <Text style={styles.logoutText}>LOGOUT</Text>
-        </PressableScale>
-      </ScrollView>
+          {/* Stats */}
+          {stats && (
+            <AnimatedMount delay={motion.stagger * 3} style={styles.fullWidth}>
+              <SectionHeader title="YOUR STATS" style={styles.sectionGap} />
+              <View style={styles.statsGrid}>
+                <StatTile icon="trophy" value={stats.challenges_won} label="WON" />
+                <StatTile
+                  icon="close-circle"
+                  value={stats.challenges_lost}
+                  label="LOST"
+                  color={colors.loss}
+                  tint={colors.lossSoft}
+                  iconColor={colors.loss}
+                />
+                <StatTile
+                  icon="trending-up"
+                  value={`${Math.round(stats.win_rate * 100)}%`}
+                  label="WIN RATE"
+                  color={colors.secondary}
+                  tint={colors.secondarySoft}
+                  iconColor={colors.secondary}
+                />
+              </View>
+              <View style={styles.statsGrid}>
+                <StatTile
+                  icon="flame"
+                  value={stats.current_streak}
+                  label="STREAK"
+                  color={colors.pending}
+                  tint={colors.pendingSoft}
+                  iconColor={colors.pending}
+                />
+                <StatTile
+                  icon="cash"
+                  value={formatBalance(stats.total_earnings_cents)}
+                  label="EARNINGS"
+                  color={colors.accent}
+                />
+              </View>
+            </AnimatedMount>
+          )}
 
-      {/* Top-up Drawer */}
-      <TopUpDrawer
-        visible={showTopUp || showNewUserTopUp}
-        onComplete={handleTopUpComplete}
-      />
-    </SafeAreaView>
+          {/* Integrations */}
+          <AnimatedMount delay={motion.stagger * 4} style={styles.fullWidth}>
+            <SectionHeader title="CONNECTED ACCOUNTS" style={styles.sectionGap} />
+            <IntegrationCard
+              icon="logo-github"
+              title="GitHub"
+              subtitle="Track commits & pull requests"
+              isLoading={isLoadingGitHub}
+              isConnected={githubStatus.connected}
+              connectedLabel={`@${githubStatus.username}`}
+              isConnecting={isConnectingGitHub}
+              onConnect={handleConnectGitHub}
+              onDisconnect={handleDisconnectGitHub}
+            />
+            <IntegrationCard
+              icon="book"
+              title="Notion"
+              subtitle="Track study notes & pages"
+              isLoading={isLoadingNotion}
+              isConnected={notionStatus.connected}
+              connectedLabel={notionStatus.workspace_name || 'Connected'}
+              isConnecting={isConnectingNotion}
+              onConnect={handleConnectNotion}
+              onDisconnect={handleDisconnectNotion}
+            />
+          </AnimatedMount>
+
+          {/* Logout — spatially separated from everything else */}
+          <PressableScale style={styles.logoutBtn} onPress={logout}>
+            <Ionicons name="log-out-outline" size={18} color={colors.loss} />
+            <Text style={styles.logoutText}>Log out</Text>
+          </PressableScale>
+        </ScrollView>
+      </SafeAreaView>
+
+      <TopUpDrawer visible={showTopUp || showNewUserTopUp} onComplete={handleTopUpComplete} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  root: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1 },
   content: {
-    alignItems: 'center',
-    paddingTop: 20,
-    paddingHorizontal: 24,
+    paddingTop: space.xl,
+    paddingHorizontal: space.xl,
     paddingBottom: 120,
   },
-  fullWidth: {
-    width: '100%',
+  fullWidth: { width: '100%' },
+  sectionGap: { marginTop: space.xxl },
+  identity: { alignItems: 'center' },
+  avatarRing: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    borderWidth: 2,
+    borderColor: colors.borderStrong,
+    padding: 4,
+    ...glow(colors.accent, 0.2),
   },
-  username: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-    marginTop: 16,
+  avatar: {
+    flex: 1,
+    borderRadius: 40,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  email: {
-    fontSize: 14,
-    color: colors.textMuted,
-    marginTop: 4,
-  },
+  username: { ...type.h2, color: colors.text, marginTop: space.md },
+  email: { ...type.callout, color: colors.textMuted, marginTop: 2 },
   balanceCard: {
     width: '100%',
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    padding: space.xl,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 24,
-    alignItems: 'center',
-    marginTop: 24,
+    borderColor: colors.borderStrong,
+    marginTop: space.xxl,
   },
-  balanceLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textMuted,
+  balanceTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
+  balanceLabel: { color: colors.textSecondary, ...type.overline },
   balanceValue: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: colors.accent,
-    marginTop: 8,
+    color: colors.text,
+    fontSize: 40,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+    marginTop: 6,
+  },
+  walletChip: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.secondarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addFundsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
     backgroundColor: colors.accent,
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    marginTop: 16,
-    gap: 6,
+    borderRadius: radius.md,
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+    marginTop: space.xl,
+    gap: 7,
   },
-  addFundsText: {
-    color: colors.background,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  statsCard: {
-    width: '100%',
-    backgroundColor: 'rgba(0,0,0,0.3)',
+  addFundsText: { ...type.callout, color: '#04231a', fontWeight: '800', fontSize: 14 },
+  statsGrid: { flexDirection: 'row', gap: space.md, marginBottom: space.md },
+  statTile: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
+    padding: space.lg,
+    alignItems: 'flex-start',
   },
-  statsTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textMuted,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 16,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 16,
-  },
-  statItem: {
+  statIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
   },
-  statItemWide: {
+  statValue: { fontSize: 22, fontWeight: '800', letterSpacing: -0.2, color: colors.text, fontVariant: ['tabular-nums'] },
+  statLabel: { color: colors.textMuted, ...type.overline, fontSize: 9.5, marginTop: 2 },
+  integrationCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  statValueAccent: {
-    color: colors.accent,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 4,
-  },
-  sectionCard: {
-    width: '100%',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginLeft: 8,
-  },
-  connectedRow: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: space.lg,
+    marginBottom: space.md,
+  },
+  integrationConnected: { borderColor: colors.borderStrong },
+  integrationLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  integrationIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  connectedInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  connectedText: {
-    color: colors.text,
-    fontSize: 14,
-    marginLeft: 8,
-  },
+  integrationText: { flex: 1 },
+  integrationTitle: { color: colors.text, ...type.bodyStrong, fontSize: 15 },
+  integrationStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  integrationSub: { color: colors.textMuted, ...type.caption, marginTop: 2 },
   connectBtn: {
+    backgroundColor: colors.accentSoft,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.sm,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+  },
+  connectText: { color: colors.accent, ...type.label, fontWeight: '700' },
+  disconnectBtn: {
+    backgroundColor: colors.lossSoft,
+    borderRadius: radius.sm,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+  },
+  disconnectText: { color: colors.loss, ...type.caption, fontWeight: '700' },
+  logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accent,
-    borderRadius: 8,
-    padding: 12,
-  },
-  connectText: {
-    color: colors.background,
-    fontWeight: '600',
-    fontSize: 14,
-    marginLeft: 8,
-  },
-  disconnectBtn: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    gap: 8,
+    backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.5)',
-    borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    borderColor: colors.lossSoft,
+    borderRadius: radius.md,
+    paddingVertical: 14,
+    marginTop: space.xxxl,
   },
-  disconnectText: {
-    color: '#ef4444',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  logoutBtn: {
-    width: '100%',
-    backgroundColor: 'rgba(239, 68, 68, 0.8)',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  logoutText: {
-    color: colors.text,
-    fontWeight: '700',
-    fontSize: 16,
-  },
+  logoutText: { color: colors.loss, ...type.bodyStrong, fontSize: 15 },
 });

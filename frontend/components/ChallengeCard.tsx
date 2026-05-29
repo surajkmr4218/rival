@@ -1,9 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, glow, motion } from '../lib/theme';
+import { colors, glow, motion, radius, space, type, elevation } from '../lib/theme';
 import { Challenge } from '../lib/types';
 import PressableScale from './anim/PressableScale';
+import StatusPill, { PillTone } from './ui/StatusPill';
 import { useReducedMotion } from './anim/useReducedMotion';
 
 interface ChallengeCardProps {
@@ -44,21 +45,15 @@ export default function ChallengeCard({ challenge, currentUserId, onPress }: Cha
   const theirProgress = isCreator ? challenge.opponent_progress : challenge.creator_progress;
 
   const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-
-  const getCategoryIcon = (): keyof typeof Ionicons.glyphMap => {
-    if (challenge.category === 'coding') return 'logo-github';
-    if (challenge.category === 'studying') return 'book';
-    return 'phone-portrait-outline';
-  };
+  const isStudying = challenge.category === 'studying';
+  const getCategoryIcon = (): keyof typeof Ionicons.glyphMap =>
+    isStudying ? 'book' : 'logo-github';
 
   const getChallengeDescription = () => {
-    // Use challenge_prompt if available (new AI referee system)
     if (challenge.challenge_prompt) {
-      // Truncate long prompts for card display
       const prompt = challenge.challenge_prompt;
-      return prompt.length > 50 ? `${prompt.substring(0, 50)}...` : prompt;
+      return prompt.length > 64 ? `${prompt.substring(0, 64)}…` : prompt;
     }
-    // Fallback to legacy goal display
     if (challenge.goal_type === 'commits_min' && challenge.goal_value) {
       return `${challenge.goal_value}+ commits`;
     }
@@ -79,101 +74,118 @@ export default function ChallengeCard({ challenge, currentUserId, onPress }: Cha
     return challenge.goal_period || '';
   };
 
+  const isActive = challenge.status === 'active';
   const isEvaluating = challenge.status === 'evaluating';
+  const isCompleted = challenge.status === 'completed';
+  const didWin = challenge.winner_id === currentUserId;
+  const isTie = isCompleted && challenge.winner_id === null;
 
-  const getStatusColor = () => {
+  // Status pill mapping
+  const pill: { tone: PillTone; label: string; icon?: keyof typeof Ionicons.glyphMap } = (() => {
     switch (challenge.status) {
       case 'active':
-        return colors.accent;
+        return { tone: 'accent', label: 'LIVE', icon: 'flash' };
       case 'evaluating':
-        return '#f59e0b'; // amber — matches detail-screen color
-      case 'completed':
-        return challenge.winner_id === currentUserId ? colors.accent : colors.error;
+        return { tone: 'pending', label: 'JUDGING' };
       case 'pending':
-        return '#fbbf24';
+        return { tone: 'pending', label: 'PENDING' };
+      case 'completed':
+        if (isTie) return { tone: 'muted', label: 'TIE' };
+        return didWin
+          ? { tone: 'accent', label: 'WON', icon: 'trophy' }
+          : { tone: 'loss', label: 'LOST' };
       case 'declined':
+        return { tone: 'loss', label: 'DECLINED' };
       case 'cancelled':
-        return colors.error;
+        return { tone: 'loss', label: 'CANCELLED' };
       default:
-        return colors.textMuted;
+        return { tone: 'muted', label: 'UNKNOWN' };
     }
-  };
+  })();
 
-  const getStatusLabel = () => {
-    if (challenge.status === 'completed') {
-      if (challenge.winner_id === null) return 'TIE';
-      return challenge.winner_id === currentUserId ? 'WON' : 'LOST';
-    }
-    return challenge.status.toUpperCase();
-  };
-
-  // Calculate progress percentage (use a reasonable default if no goal_value)
   const maxProgress = Math.max(myProgress, theirProgress, 10);
+  const featured = isActive;
 
   return (
     <PressableScale
-      style={[styles.container, challenge.status === 'active' && glow(colors.accent, 0.22)]}
+      style={[
+        styles.container,
+        elevation(1),
+        featured && styles.featured,
+        featured && glow(colors.accent, 0.16),
+      ]}
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${pill.label} challenge: ${getChallengeDescription()}`}
     >
+      {featured && <View style={styles.edge} />}
+
       <View style={styles.header}>
-        <View style={styles.categoryBadge}>
-          <Ionicons name={getCategoryIcon()} size={16} color={colors.accent} />
+        <View style={styles.categoryChip}>
+          <Ionicons name={getCategoryIcon()} size={13} color={colors.accent} />
+          <Text style={styles.categoryText}>{isStudying ? 'Studying' : 'Coding'}</Text>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>
-          <Text style={styles.statusText}>{getStatusLabel()}</Text>
-        </View>
+        <StatusPill tone={pill.tone} label={pill.label} icon={pill.icon} dot={isActive} />
       </View>
 
-      <View style={styles.body}>
-        <Text style={styles.goal} numberOfLines={2}>{getChallengeDescription()}</Text>
+      <Text style={styles.goal} numberOfLines={2}>
+        {getChallengeDescription()}
+      </Text>
+      <View style={styles.metaRow}>
+        <Ionicons name="time-outline" size={13} color={colors.textMuted} />
         <Text style={styles.period}>{getDuration()}</Text>
       </View>
 
+      <View style={styles.divider} />
+
       <View style={styles.footer}>
         <View style={styles.userSection}>
-          <Ionicons name="person-circle" size={24} color={colors.accent} />
-          <Text style={styles.username}>vs @{opponent?.username || 'Open'}</Text>
+          <View style={styles.avatar}>
+            <Ionicons name="person" size={15} color={colors.accent} />
+          </View>
+          <View>
+            <Text style={styles.vsLabel}>OPPONENT</Text>
+            <Text style={styles.username}>@{opponent?.username || 'Open'}</Text>
+          </View>
         </View>
         <View style={styles.stakeSection}>
-          <Text style={styles.stakeLabel}>PRIZE</Text>
+          <Text style={styles.stakeLabel}>PRIZE POOL</Text>
           <Text style={styles.stakeAmount}>{formatCurrency(challenge.prize_pool_cents)}</Text>
         </View>
       </View>
 
-      {challenge.status === 'active' && (
+      {isActive && (
         <View style={styles.progressSection}>
           <View style={styles.progressRow}>
             <Text style={styles.progressLabel}>You</Text>
             <View style={styles.progressBarContainer}>
               <ProgressFill ratio={myProgress / maxProgress} color={colors.accent} />
             </View>
-            <Text style={styles.progressValue}>{myProgress}</Text>
+            <Text style={[styles.progressValue, { color: colors.accent }]}>{myProgress}</Text>
           </View>
           <View style={styles.progressRow}>
             <Text style={styles.progressLabel}>Them</Text>
             <View style={styles.progressBarContainer}>
-              <ProgressFill ratio={theirProgress / maxProgress} color={colors.error} />
+              <ProgressFill ratio={theirProgress / maxProgress} color={colors.loss} />
             </View>
-            <Text style={styles.progressValue}>{theirProgress}</Text>
+            <Text style={[styles.progressValue, { color: colors.loss }]}>{theirProgress}</Text>
           </View>
         </View>
       )}
 
-      {/* Show AI verdict indicator for completed challenges */}
-      {challenge.status === 'completed' && challenge.ai_verdict && (
-        <View style={styles.verdictIndicator}>
-          <Ionicons name="shield-checkmark" size={14} color={colors.accent} />
-          <Text style={styles.verdictText}>AI Referee decided</Text>
+      {isCompleted && challenge.ai_verdict && (
+        <View style={[styles.verdictIndicator, didWin && styles.verdictWin, !didWin && !isTie && styles.verdictLoss]}>
+          <Ionicons name="shield-checkmark" size={13} color={didWin ? colors.accent : isTie ? colors.textSecondary : colors.loss} />
+          <Text style={[styles.verdictText, { color: didWin ? colors.accent : isTie ? colors.textSecondary : colors.loss }]}>
+            AI Referee decided
+          </Text>
         </View>
       )}
 
-      {/* In-flight indicator while the AI referee evaluates */}
       {isEvaluating && (
-        <View style={styles.verdictIndicator}>
-          <ActivityIndicator size="small" color="#f59e0b" />
-          <Text style={[styles.verdictText, { color: '#f59e0b' }]}>
-            AI Referee evaluating…
-          </Text>
+        <View style={[styles.verdictIndicator, styles.verdictJudging]}>
+          <ActivityIndicator size="small" color={colors.pending} />
+          <Text style={[styles.verdictText, { color: colors.pending }]}>AI Referee evaluating…</Text>
         </View>
       )}
     </PressableScale>
@@ -182,125 +194,113 @@ export default function ChallengeCard({ challenge, currentUserId, onPress }: Cha
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 16,
-    marginBottom: 12,
+    padding: space.lg,
+    marginBottom: space.md,
+    overflow: 'hidden',
+  },
+  featured: {
+    backgroundColor: colors.surfaceHigh,
+    borderColor: colors.borderStrong,
+  },
+  edge: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: colors.accent,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: space.md,
   },
-  categoryBadge: {
-    backgroundColor: colors.background,
-    borderRadius: 8,
-    padding: 6,
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: colors.hairline,
   },
-  statusBadge: {
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  statusText: {
-    color: colors.background,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  body: {
-    marginBottom: 12,
-  },
-  goal: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-    lineHeight: 22,
-  },
-  period: {
-    color: colors.textMuted,
-    fontSize: 12,
-    marginTop: 4,
+  categoryText: { color: colors.textSecondary, ...type.caption, fontWeight: '600' },
+  goal: { color: colors.text, ...type.h3, lineHeight: 24 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  period: { color: colors.textMuted, ...type.caption },
+  divider: {
+    height: 1,
+    backgroundColor: colors.hairline,
+    marginVertical: space.md,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  userSection: {
-    flexDirection: 'row',
+  userSection: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.accentSoft,
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
   },
-  username: {
-    color: colors.text,
-    fontSize: 14,
-  },
-  stakeSection: {
-    alignItems: 'flex-end',
-  },
-  stakeLabel: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '600',
-  },
+  vsLabel: { color: colors.textMuted, ...type.overline, fontSize: 9 },
+  username: { color: colors.text, ...type.callout, fontWeight: '600' },
+  stakeSection: { alignItems: 'flex-end' },
+  stakeLabel: { color: colors.secondary, ...type.overline, fontSize: 9 },
   stakeAmount: {
-    color: colors.accent,
-    fontSize: 18,
-    fontWeight: '700',
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+    marginTop: 1,
   },
   progressSection: {
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: space.md,
+    paddingTop: space.md,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.hairline,
+    gap: 8,
   },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  progressLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-    width: 40,
-  },
+  progressRow: { flexDirection: 'row', alignItems: 'center' },
+  progressLabel: { color: colors.textSecondary, ...type.caption, width: 38 },
   progressBarContainer: {
     flex: 1,
-    height: 6,
-    backgroundColor: colors.background,
-    borderRadius: 3,
+    height: 7,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: 4,
     marginHorizontal: 8,
+    overflow: 'hidden',
   },
-  progressBar: {
-    height: '100%',
-    backgroundColor: colors.accent,
-    borderRadius: 3,
-  },
-  progressBarOpponent: {
-    backgroundColor: colors.error,
-  },
+  progressBar: { height: '100%', borderRadius: 4 },
   progressValue: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '600',
-    width: 30,
+    ...type.caption,
+    fontWeight: '700',
+    width: 28,
     textAlign: 'right',
+    fontVariant: ['tabular-nums'],
   },
   verdictIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    marginTop: space.md,
+    paddingVertical: 9,
+    borderRadius: radius.sm,
     gap: 6,
   },
-  verdictText: {
-    color: colors.textMuted,
-    fontSize: 12,
-  },
+  verdictWin: { backgroundColor: colors.accentSoft },
+  verdictLoss: { backgroundColor: colors.lossSoft },
+  verdictJudging: { backgroundColor: colors.pendingSoft },
+  verdictText: { ...type.caption, fontWeight: '600' },
 });

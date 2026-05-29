@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { colors } from '../../lib/theme';
+import { colors, motion, space, radius, type, glow, elevation } from '../../lib/theme';
 import { Challenge, NotionPage, NotionActivity, AiVerdict } from '../../lib/types';
 import {
   getChallenge,
@@ -28,7 +28,10 @@ import NotionPagePicker from '../../components/NotionPagePicker';
 import ChallengeResultPopup from '../../components/ChallengeResultPopup';
 import AnimatedMount from '../../components/anim/AnimatedMount';
 import PressableScale from '../../components/anim/PressableScale';
-import { motion, glow } from '../../lib/theme';
+import ScreenBackground from '../../components/ui/ScreenBackground';
+import Gradient from '../../components/ui/Gradient';
+import PrimaryButton from '../../components/ui/PrimaryButton';
+import StatusPill, { PillTone } from '../../components/ui/StatusPill';
 
 export default function ChallengeDetailScreen() {
   const router = useRouter();
@@ -40,10 +43,7 @@ export default function ChallengeDetailScreen() {
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [showPagePicker, setShowPagePicker] = useState(false);
   const [isPollingNotion, setIsPollingNotion] = useState(false);
-  // Tracks the background GitHub/Notion refresh that runs after the page
-  // renders — drives the "Refreshing progress…" indicator on the progress card.
   const [isRefreshingProgress, setIsRefreshingProgress] = useState(false);
-  // For accepting studying challenges - opponent must select their page
   const [selectedAcceptPage, setSelectedAcceptPage] = useState<NotionPage | null>(null);
   const [showResultPopup, setShowResultPopup] = useState(false);
   const cancelledRef = useRef(false);
@@ -51,9 +51,6 @@ export default function ChallengeDetailScreen() {
   useEffect(() => {
     cancelledRef.current = false;
     if (user && id) {
-      // Render the page from cached DB state first (fast — no third-party
-      // fetches), then kick off a background refresh that will update the
-      // progress bar when GitHub/Notion respond.
       loadChallenge().then(refreshProgressInBackground);
     }
     return () => {
@@ -75,8 +72,6 @@ export default function ChallengeDetailScreen() {
 
   const refreshProgressInBackground = async () => {
     if (!id) return;
-    // Only worth refreshing for active challenges — pending/completed/etc.
-    // have no live progress to update.
     setIsRefreshingProgress(true);
     try {
       const { data } = await refreshChallengeProgress(parseInt(id));
@@ -89,12 +84,10 @@ export default function ChallengeDetailScreen() {
   };
 
   const handleAccept = async () => {
-    // For studying challenges, require page selection
     if (challenge?.category === 'studying' && !selectedAcceptPage) {
       Alert.alert('Select Study Page', 'Please select a Notion page to track for this challenge.');
       return;
     }
-
     setIsActionLoading(true);
     try {
       await acceptChallenge(parseInt(id!), {
@@ -190,10 +183,6 @@ export default function ChallengeDetailScreen() {
         {
           text: 'Evaluate',
           onPress: async () => {
-            // Fire-and-forget: kick off the background job on the server, then
-            // navigate home. The dashboard shows the challenge as EVALUATING
-            // until the AI finishes (no client-side polling — avoids client
-            // timeouts when Gemini + GitHub/Notion fetches run long).
             setIsEvaluating(true);
             try {
               await evaluateChallenge(parseInt(id!));
@@ -232,20 +221,9 @@ export default function ChallengeDetailScreen() {
     return challenge.opponent?.username;
   };
 
-  const didUserWin = () => {
-    return challenge?.winner_id === user?.id;
-  };
-
-  const getOpponentUsername = () => {
-    if (!challenge) return '';
-    if (challenge.creator.id === user?.id) {
-      return challenge.opponent?.username || 'Opponent';
-    }
-    return challenge.creator.username;
-  };
+  const didUserWin = () => challenge?.winner_id === user?.id;
 
   // The backend stores ai_verdict as a JSON-serialized AiVerdict.
-  // Return the personalized verdict for the current user, or a fallback.
   const getPersonalizedVerdict = (): string => {
     const fallback = 'Challenge evaluated by AI referee.';
     if (!challenge?.ai_verdict) return fallback;
@@ -290,17 +268,18 @@ export default function ChallengeDetailScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.accent} />
-        </View>
-      </SafeAreaView>
+      <View style={styles.root}>
+        <ScreenBackground />
+        <SafeAreaView style={styles.container}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.accent} />
+          </View>
+        </SafeAreaView>
+      </View>
     );
   }
 
-  if (!challenge) {
-    return null;
-  }
+  if (!challenge) return null;
 
   const isOpponent = challenge.opponent?.id === user?.id;
   const isCreator = challenge.creator?.id === user?.id;
@@ -312,351 +291,344 @@ export default function ChallengeDetailScreen() {
   const canCancel = isCreator && isPending;
   const canEvaluate = isActive && challenge.challenge_prompt;
 
-  // Get user's Notion page and activity
   const myNotionPageId = isCreator ? challenge.creator_notion_page_id : challenge.opponent_notion_page_id;
-  const opponentNotionPageId = isCreator ? challenge.opponent_notion_page_id : challenge.creator_notion_page_id;
   const myNotionActivity = isCreator ? challenge.creator_notion_activity : challenge.opponent_notion_activity;
   const opponentNotionActivity = isCreator ? challenge.opponent_notion_activity : challenge.creator_notion_activity;
-  const needsNotionPage = isStudying && isActive && !myNotionPageId;
+
+  const isTie = isCompleted && challenge.winner_id === null;
+  const won = isCompleted && didUserWin();
+
+  // Head-to-head progress (coding)
+  const myCommits = isCreator ? challenge.creator_progress : challenge.opponent_progress;
+  const theirCommits = isCreator ? challenge.opponent_progress : challenge.creator_progress;
+  const maxCommits = Math.max(myCommits, theirCommits, 5);
+
+  const statusTone: PillTone = isActive
+    ? 'accent'
+    : isCompleted
+    ? (won ? 'accent' : isTie ? 'muted' : 'loss')
+    : challenge.status === 'evaluating'
+    ? 'pending'
+    : isPending
+    ? 'pending'
+    : 'loss';
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text style={styles.headerTitle}>
-          {isPending
-            ? isCreator
-              ? 'Pending Challenge'
-              : 'Challenge Invitation'
-            : isCompleted
-            ? 'Challenge Complete'
-            : 'Active Challenge'}
-        </Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Category Badge */}
-        <View style={styles.categoryBadge}>
-          <Ionicons
-            name={isStudying ? 'book' : 'logo-github'}
-            size={14}
-            color={colors.accent}
-          />
-          <Text style={styles.categoryBadgeText}>
-            {isStudying ? 'Studying Challenge' : 'Coding Challenge'}
-          </Text>
-        </View>
-
-        {/* Challenger Info */}
-        <View style={styles.challengerSection}>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={48} color={colors.accent} />
-          </View>
-          <Text style={styles.challengerName}>
+    <View style={styles.root}>
+      <ScreenBackground />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        {/* Header */}
+        <View style={styles.header}>
+          <PressableScale onPress={() => router.back()} style={styles.iconBtn}>
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
+          </PressableScale>
+          <Text style={styles.headerTitle}>
             {isPending
-              ? `@${challenge.creator.username} challenged you!`
-              : `vs @${isOpponent ? challenge.creator.username : challenge.opponent?.username || 'Open'}`}
+              ? isCreator
+                ? 'Pending Challenge'
+                : 'Challenge Invitation'
+              : isCompleted
+              ? 'Result'
+              : 'Active Battle'}
           </Text>
+          <View style={styles.iconBtn} />
         </View>
 
-        {/* Challenge Prompt */}
-        {challenge.challenge_prompt && (
-          <AnimatedMount delay={0} style={styles.promptCard}>
-            <Text style={styles.promptLabel}>CHALLENGE</Text>
-            <Text style={styles.promptText}>{challenge.challenge_prompt}</Text>
-          </AnimatedMount>
-        )}
-
-        {/* AI Verdict (for completed challenges) */}
-        {isCompleted && challenge.ai_verdict && (
-          <AnimatedMount delay={motion.stagger} translateY={20} style={[styles.verdictCard, glow(colors.accent, 0.25)]}>
-            <View style={styles.verdictHeader}>
-              <Ionicons name="shield-checkmark" size={24} color={colors.accent} />
-              <Text style={styles.verdictTitle}>AI REFEREE VERDICT</Text>
-            </View>
-            {challenge.winner_id ? (
-              didUserWin() ? (
-                <View style={styles.winnerBadge}>
-                  <Ionicons name="trophy" size={20} color={colors.background} />
-                  <Text style={styles.winnerText}>You won!</Text>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={{ paddingBottom: space.xxl }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Completed → celebratory result hero */}
+          {isCompleted && challenge.ai_verdict ? (
+            <AnimatedMount delay={0} translateY={16}>
+              <Gradient
+                colors={won ? ['#0d5a39', '#0e3826'] : isTie ? ['#173a2a', '#0e3826'] : ['#4a2230', '#0e3826']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                radius={radius.xl}
+                style={[styles.resultHero, elevation(2), won && glow(colors.accent, 0.3)]}
+              >
+                <View
+                  style={[
+                    styles.trophyRing,
+                    { borderColor: won ? colors.accent : isTie ? colors.textSecondary : colors.loss },
+                  ]}
+                >
+                  <Ionicons
+                    name={won ? 'trophy' : isTie ? 'swap-horizontal' : 'flag'}
+                    size={36}
+                    color={won ? colors.accent : isTie ? colors.textSecondary : colors.loss}
+                  />
                 </View>
-              ) : (
-                <View style={[styles.winnerBadge, styles.lossBadge]}>
-                  <Ionicons name="trophy" size={20} color={colors.text} />
-                  <Text style={[styles.winnerText, styles.lossText]}>@{getWinnerUsername()} won</Text>
+                <Text style={styles.resultTitle}>
+                  {won ? 'VICTORY' : isTie ? "IT'S A TIE" : 'DEFEATED'}
+                </Text>
+                <Text style={styles.resultSub}>
+                  {won
+                    ? 'The pot is yours.'
+                    : isTie
+                    ? 'Stakes returned to both rivals.'
+                    : `@${getWinnerUsername()} took this one.`}
+                </Text>
+                <View style={styles.resultAmountWrap}>
+                  <Text
+                    style={[
+                      styles.resultAmount,
+                      { color: won ? colors.accent : isTie ? colors.text : colors.loss },
+                    ]}
+                  >
+                    {won ? '+' : isTie ? '' : '-'}
+                    {formatCurrency(won ? challenge.prize_pool_cents - challenge.stake_cents : challenge.stake_cents)}
+                  </Text>
                 </View>
-              )
-            ) : (
-              <View style={[styles.winnerBadge, styles.tieBadge]}>
-                <Ionicons name="swap-horizontal" size={20} color={colors.text} />
-                <Text style={[styles.winnerText, styles.tieText]}>It's a tie!</Text>
+              </Gradient>
+            </AnimatedMount>
+          ) : (
+            /* Active / pending → challenger hero */
+            <AnimatedMount delay={0} style={styles.challengerSection}>
+              <View style={styles.categoryBadge}>
+                <Ionicons name={isStudying ? 'book' : 'logo-github'} size={13} color={colors.accent} />
+                <Text style={styles.categoryBadgeText}>
+                  {isStudying ? 'Studying' : 'Coding'} · {challenge.status.toUpperCase()}
+                </Text>
               </View>
-            )}
-            <View style={styles.verdictExplanation}>
+              <View style={styles.avatarRing}>
+                <View style={styles.avatar}>
+                  <Ionicons name="person" size={40} color={colors.accent} />
+                </View>
+              </View>
+              <Text style={styles.challengerName}>
+                {isPending
+                  ? `@${challenge.creator.username} challenged you`
+                  : `vs @${isOpponent ? challenge.creator.username : challenge.opponent?.username || 'Open'}`}
+              </Text>
+            </AnimatedMount>
+          )}
+
+          {/* Challenge prompt */}
+          {challenge.challenge_prompt && (
+            <AnimatedMount delay={motion.stagger} style={styles.promptCard}>
+              <View style={styles.promptHeader}>
+                <Ionicons name="flag" size={13} color={colors.accent} />
+                <Text style={styles.promptLabel}>THE CHALLENGE</Text>
+              </View>
+              <Text style={styles.promptText}>{challenge.challenge_prompt}</Text>
+            </AnimatedMount>
+          )}
+
+          {/* Verdict explanation (completed) */}
+          {isCompleted && challenge.ai_verdict && (
+            <AnimatedMount delay={motion.stagger * 2} style={styles.verdictCard}>
+              <View style={styles.verdictHeader}>
+                <Ionicons name="shield-checkmark" size={18} color={colors.accent} />
+                <Text style={styles.verdictTitle}>AI REFEREE VERDICT</Text>
+              </View>
               <Text style={styles.verdictLabel}>
-                {!challenge.winner_id
-                  ? 'Explanation:'
-                  : didUserWin()
-                  ? 'Why you won:'
-                  : 'Why you lost:'}
+                {isTie ? 'Explanation' : won ? 'Why you won' : 'Why you lost'}
               </Text>
               <Text style={styles.verdictText}>{getPersonalizedVerdict()}</Text>
-            </View>
-          </AnimatedMount>
-        )}
-
-        {/* Challenge Summary */}
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>CHALLENGE DETAILS</Text>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Duration</Text>
-            <Text style={styles.summaryValue}>{formatDuration(challenge.duration_hours)}</Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <View style={styles.stakeDot} />
-            <Text style={styles.summaryLabel}>Stake</Text>
-            <Text style={[styles.summaryValue, styles.stakeValue]}>
-              {formatCurrency(challenge.stake_cents)}
-            </Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Prize Pool</Text>
-            <Text style={[styles.summaryValue, styles.prizeValue]}>
-              {formatCurrency(challenge.prize_pool_cents)}
-            </Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Status</Text>
-            <Text style={[styles.summaryValue, { color: getStatusColor(challenge.status) }]}>
-              {challenge.status.toUpperCase()}
-            </Text>
-          </View>
-
-          {challenge.ends_at && (
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Ends</Text>
-              <Text style={styles.summaryValue}>
-                {new Date(challenge.ends_at).toLocaleString()}
-              </Text>
-            </View>
+            </AnimatedMount>
           )}
-        </View>
 
-        {/* Notion Page Selection (for studying challenges) */}
-        {isStudying && isActive && (
-          <View style={styles.notionSection}>
-            <Text style={styles.sectionTitle}>YOUR STUDY PAGE</Text>
-            {myNotionPageId ? (
-              <View style={styles.notionPageSelected}>
-                <View style={styles.notionPageInfo}>
-                  <Ionicons name="document-text" size={24} color={colors.accent} />
-                  <Text style={styles.notionPageText}>Page connected</Text>
-                </View>
-                <Pressable
-                  style={styles.refreshButton}
-                  onPress={handlePollNotion}
-                  disabled={isPollingNotion}
-                >
-                  {isPollingNotion ? (
-                    <ActivityIndicator size="small" color={colors.accent} />
-                  ) : (
-                    <Ionicons name="refresh" size={20} color={colors.accent} />
-                  )}
-                </Pressable>
+          {/* Details */}
+          <AnimatedMount delay={motion.stagger * 3} style={styles.summaryCard}>
+            <Text style={styles.cardEyebrow}>CHALLENGE DETAILS</Text>
+            <DetailRow icon="time-outline" label="Duration" value={formatDuration(challenge.duration_hours)} />
+            <DetailRow icon="lock-closed-outline" label="Your stake" value={formatCurrency(challenge.stake_cents)} valueColor={colors.text} />
+            <DetailRow
+              icon="trophy-outline"
+              label="Prize pool"
+              value={formatCurrency(challenge.prize_pool_cents)}
+              valueColor={colors.secondary}
+              emphasize
+            />
+            <View style={styles.detailRow}>
+              <View style={styles.detailLeft}>
+                <Ionicons name="pulse-outline" size={16} color={colors.textMuted} />
+                <Text style={styles.detailLabel}>Status</Text>
               </View>
-            ) : (
-              <Pressable
-                style={styles.selectPageButton}
-                onPress={() => setShowPagePicker(true)}
-              >
-                <Ionicons name="add-circle" size={24} color={colors.accent} />
-                <Text style={styles.selectPageText}>Select Study Page</Text>
-              </Pressable>
+              <StatusPill tone={statusTone} label={challenge.status.toUpperCase()} />
+            </View>
+            {challenge.ends_at && (
+              <DetailRow
+                icon="calendar-outline"
+                label="Ends"
+                value={new Date(challenge.ends_at).toLocaleString([], {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+                last
+              />
             )}
-          </View>
-        )}
+          </AnimatedMount>
 
-        {/* Notion Activity (for studying challenges) */}
-        {isStudying && isActive && (myNotionActivity || opponentNotionActivity) && (
-          <View style={styles.progressCard}>
-            <Text style={styles.progressTitle}>STUDY ACTIVITY</Text>
-            {renderNotionActivityRow(
-              challenge.creator.username,
-              challenge.creator.id === user?.id,
-              challenge.creator_notion_activity
-            )}
-            {challenge.opponent && renderNotionActivityRow(
-              challenge.opponent.username,
-              challenge.opponent.id === user?.id,
-              challenge.opponent_notion_activity
-            )}
-          </View>
-        )}
-
-        {/* Progress (for coding challenges) */}
-        {!isStudying && isActive && (
-          <View style={styles.progressCard}>
-            <View style={styles.progressHeader}>
-              <Text style={styles.progressTitle}>CURRENT PROGRESS</Text>
-              {isRefreshingProgress && (
-                <View style={styles.refreshingPill}>
-                  <ActivityIndicator size="small" color={colors.accent} />
-                  <Text style={styles.refreshingPillText}>Refreshing…</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.progressRow}>
-              <Text style={styles.progressLabel}>
-                @{challenge.creator.username} {challenge.creator.id === user?.id ? '(You)' : ''}
-              </Text>
-              <Text style={styles.progressValue}>{challenge.creator_progress} commits</Text>
-            </View>
-            <View style={styles.progressRow}>
-              <Text style={styles.progressLabel}>
-                @{challenge.opponent?.username} {challenge.opponent?.id === user?.id ? '(You)' : ''}
-              </Text>
-              <Text style={styles.progressValue}>{challenge.opponent_progress} commits</Text>
-            </View>
-          </View>
-        )}
-
-        {/* AI Referee Info */}
-        {!isCompleted && (
-          <View style={styles.infoCard}>
-            <View style={styles.infoHeader}>
-              <Ionicons name="shield-checkmark" size={20} color={colors.accent} />
-              <Text style={styles.infoTitle}>AI Referee</Text>
-            </View>
-            <Text style={styles.infoText}>
-              {isStudying
-                ? 'When the challenge ends, the AI referee will analyze both participants\' Notion study notes and determine a winner based on quality, depth, and organization.'
-                : 'When the challenge ends, the AI referee will analyze both participants\' GitHub activity and determine a winner based on the challenge criteria.'}
-            </Text>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Action Buttons */}
-      {canRespond && (
-        <View style={styles.footer}>
-          {/* Page selection for studying challenges */}
-          {isStudying && (
-            <View style={styles.acceptPageSection}>
-              <Text style={styles.acceptPageLabel}>SELECT YOUR STUDY PAGE</Text>
-              {selectedAcceptPage ? (
-                <View style={styles.selectedAcceptPage}>
-                  <View style={styles.selectedAcceptPageInfo}>
-                    <Ionicons name="document-text" size={20} color={colors.accent} />
-                    <Text style={styles.selectedAcceptPageTitle} numberOfLines={1}>
-                      {selectedAcceptPage.title || 'Untitled'}
-                    </Text>
+          {/* Notion page selection (active studying) */}
+          {isStudying && isActive && (
+            <View style={styles.card}>
+              <Text style={styles.cardEyebrow}>YOUR STUDY PAGE</Text>
+              {myNotionPageId ? (
+                <View style={styles.notionPageSelected}>
+                  <View style={styles.notionPageInfo}>
+                    <Ionicons name="document-text" size={22} color={colors.accent} />
+                    <Text style={styles.notionPageText}>Page connected</Text>
                   </View>
-                  <Pressable onPress={() => setShowPagePicker(true)}>
-                    <Text style={styles.changeText}>Change</Text>
-                  </Pressable>
+                  <PressableScale style={styles.refreshButton} onPress={handlePollNotion} disabled={isPollingNotion}>
+                    {isPollingNotion ? (
+                      <ActivityIndicator size="small" color={colors.accent} />
+                    ) : (
+                      <Ionicons name="refresh" size={20} color={colors.accent} />
+                    )}
+                  </PressableScale>
                 </View>
               ) : (
-                <Pressable
-                  style={styles.selectAcceptPageButton}
-                  onPress={() => setShowPagePicker(true)}
-                >
-                  <Ionicons name="add-circle" size={20} color={colors.accent} />
-                  <Text style={styles.selectAcceptPageText}>Select Notion Page</Text>
-                </Pressable>
+                <PressableScale style={styles.dashedButton} onPress={() => setShowPagePicker(true)}>
+                  <Ionicons name="add-circle" size={22} color={colors.accent} />
+                  <Text style={styles.dashedButtonText}>Select Study Page</Text>
+                </PressableScale>
               )}
             </View>
           )}
 
-          <PressableScale
-            style={[
-              styles.acceptButton,
-              isStudying && !selectedAcceptPage ? styles.acceptButtonDisabled : glow(colors.accent, 0.4),
-            ]}
-            onPress={handleAccept}
-            disabled={isActionLoading || (isStudying && !selectedAcceptPage)}
-          >
-            <Text
-              style={[
-                styles.acceptText,
-                isStudying && !selectedAcceptPage && styles.acceptTextDisabled,
-              ]}
-            >
-              {isActionLoading ? 'PROCESSING...' : 'ACCEPT CHALLENGE'}
-            </Text>
-          </PressableScale>
-          <PressableScale
-            style={styles.declineButton}
-            onPress={handleDecline}
-            disabled={isActionLoading}
-          >
-            <Text style={styles.declineText}>DECLINE</Text>
-          </PressableScale>
-        </View>
-      )}
+          {/* Notion activity (active studying) */}
+          {isStudying && isActive && (myNotionActivity || opponentNotionActivity) && (
+            <View style={styles.card}>
+              <Text style={styles.cardEyebrow}>STUDY ACTIVITY</Text>
+              {renderNotionActivityRow(
+                challenge.creator.username,
+                challenge.creator.id === user?.id,
+                challenge.creator_notion_activity
+              )}
+              {challenge.opponent &&
+                renderNotionActivityRow(
+                  challenge.opponent.username,
+                  challenge.opponent.id === user?.id,
+                  challenge.opponent_notion_activity
+                )}
+            </View>
+          )}
 
-      {canCancel && (
-        <View style={styles.footer}>
-          <View style={styles.pendingInfo}>
-            <Ionicons name="time-outline" size={20} color={colors.textMuted} />
-            <Text style={styles.pendingInfoText}>
-              Waiting for @{challenge.opponent?.username || 'opponent'} to respond
-            </Text>
-          </View>
-          <PressableScale
-            style={styles.cancelButton}
-            onPress={handleCancel}
-            disabled={isActionLoading}
-          >
-            <Text style={styles.cancelText}>
-              {isActionLoading ? 'CANCELLING...' : 'CANCEL CHALLENGE'}
-            </Text>
-          </PressableScale>
-          <Text style={styles.cancelHint}>
-            Your stake will be refunded
-          </Text>
-        </View>
-      )}
+          {/* Progress (active coding) — head to head */}
+          {!isStudying && isActive && (
+            <View style={styles.card}>
+              <View style={styles.progressHeaderRow}>
+                <Text style={styles.cardEyebrow}>HEAD TO HEAD</Text>
+                {isRefreshingProgress && (
+                  <View style={styles.refreshingPill}>
+                    <ActivityIndicator size="small" color={colors.accent} />
+                    <Text style={styles.refreshingPillText}>Syncing…</Text>
+                  </View>
+                )}
+              </View>
+              <H2HBar
+                label={`@${challenge.creator.username}${challenge.creator.id === user?.id ? ' (You)' : ''}`}
+                value={isCreator ? myCommits : theirCommits}
+                ratio={(isCreator ? myCommits : theirCommits) / maxCommits}
+                color={isCreator ? colors.accent : colors.loss}
+              />
+              <H2HBar
+                label={`@${challenge.opponent?.username}${challenge.opponent?.id === user?.id ? ' (You)' : ''}`}
+                value={isCreator ? theirCommits : myCommits}
+                ratio={(isCreator ? theirCommits : myCommits) / maxCommits}
+                color={isCreator ? colors.loss : colors.accent}
+              />
+              <Text style={styles.progressUnit}>commits tracked so far</Text>
+            </View>
+          )}
 
-      {canEvaluate && (
-        <View style={styles.footer}>
-          <PressableScale
-            style={[styles.evaluateButton, glow(colors.accent, 0.45)]}
-            onPress={handleEvaluate}
-            disabled={isEvaluating}
-          >
-            {isEvaluating ? (
-              <ActivityIndicator color={colors.background} />
-            ) : (
-              <>
-                <Ionicons name="shield-checkmark" size={20} color={colors.background} />
-                <Text style={styles.evaluateText}>REQUEST AI EVALUATION</Text>
-              </>
+          {/* AI referee info (not completed) */}
+          {!isCompleted && (
+            <View style={styles.infoCard}>
+              <View style={styles.infoHeader}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="shield-checkmark" size={18} color={colors.accent} />
+                </View>
+                <Text style={styles.infoTitle}>AI Referee</Text>
+              </View>
+              <Text style={styles.infoText}>
+                {isStudying
+                  ? "When the challenge ends, the AI referee analyzes both participants' Notion study notes and decides a winner based on quality, depth, and organization."
+                  : "When the challenge ends, the AI referee analyzes both participants' GitHub activity and decides a winner based on the challenge criteria."}
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Action footers */}
+        {canRespond && (
+          <View style={styles.footer}>
+            {isStudying && (
+              <View style={styles.acceptPageSection}>
+                <Text style={styles.acceptPageLabel}>SELECT YOUR STUDY PAGE</Text>
+                {selectedAcceptPage ? (
+                  <View style={styles.selectedAcceptPage}>
+                    <View style={styles.selectedAcceptPageInfo}>
+                      <Ionicons name="document-text" size={20} color={colors.accent} />
+                      <Text style={styles.selectedAcceptPageTitle} numberOfLines={1}>
+                        {selectedAcceptPage.title || 'Untitled'}
+                      </Text>
+                    </View>
+                    <Pressable onPress={() => setShowPagePicker(true)}>
+                      <Text style={styles.changeText}>Change</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <PressableScale style={styles.dashedButton} onPress={() => setShowPagePicker(true)}>
+                    <Ionicons name="add-circle" size={20} color={colors.accent} />
+                    <Text style={styles.dashedButtonText}>Select Notion Page</Text>
+                  </PressableScale>
+                )}
+              </View>
             )}
-          </PressableScale>
-          <Text style={styles.evaluateHint}>
-            This will end the challenge and determine a winner
-          </Text>
-        </View>
-      )}
+            <PrimaryButton
+              label={isActionLoading ? 'PROCESSING…' : 'ACCEPT CHALLENGE'}
+              onPress={handleAccept}
+              loading={isActionLoading}
+              disabled={isStudying && !selectedAcceptPage}
+            />
+            <PressableScale style={styles.secondaryBtn} onPress={handleDecline} disabled={isActionLoading}>
+              <Text style={styles.secondaryText}>Decline</Text>
+            </PressableScale>
+          </View>
+        )}
 
-      {/* Notion Page Picker Modal */}
+        {canCancel && (
+          <View style={styles.footer}>
+            <View style={styles.pendingInfo}>
+              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
+              <Text style={styles.pendingInfoText}>
+                Waiting for @{challenge.opponent?.username || 'opponent'} to respond
+              </Text>
+            </View>
+            <PressableScale style={styles.dangerBtn} onPress={handleCancel} disabled={isActionLoading}>
+              <Text style={styles.dangerText}>{isActionLoading ? 'CANCELLING…' : 'Cancel Challenge'}</Text>
+            </PressableScale>
+            <Text style={styles.footerHint}>Your stake will be refunded</Text>
+          </View>
+        )}
+
+        {canEvaluate && (
+          <View style={styles.footer}>
+            <PrimaryButton
+              label={isEvaluating ? 'STARTING…' : 'REQUEST AI EVALUATION'}
+              icon="shield-checkmark"
+              onPress={handleEvaluate}
+              loading={isEvaluating}
+            />
+            <Text style={styles.footerHint}>This ends the challenge and determines a winner</Text>
+          </View>
+        )}
+      </SafeAreaView>
+
       <NotionPagePicker
         visible={showPagePicker}
         onClose={() => setShowPagePicker(false)}
         onSelectPage={(page) => {
-          // For pending challenges (accepting), just set local state
           if (isPending && isOpponent) {
             setSelectedAcceptPage(page);
           } else {
-            // For active challenges, call the API
             handleSelectNotionPage(page);
           }
         }}
@@ -669,514 +641,306 @@ export default function ChallengeDetailScreen() {
         amount={challenge?.stake_cents || 0}
         onDismiss={() => setShowResultPopup(false)}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'active':
-      return colors.accent;
-    case 'evaluating':
-      return '#f59e0b';
-    case 'completed':
-      return '#3b82f6';
-    case 'declined':
-    case 'cancelled':
-      return colors.error;
-    default:
-      return colors.textMuted;
-  }
-};
+// ── Small presentational helpers ──────────────────────────────────────────────
+function DetailRow({
+  icon,
+  label,
+  value,
+  valueColor = colors.text,
+  emphasize = false,
+  last = false,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  valueColor?: string;
+  emphasize?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <View style={[styles.detailRow, !last && styles.detailRowBorder]}>
+      <View style={styles.detailLeft}>
+        <Ionicons name={icon} size={16} color={colors.textMuted} />
+        <Text style={styles.detailLabel}>{label}</Text>
+      </View>
+      <Text style={[styles.detailValue, { color: valueColor }, emphasize && styles.detailValueBig]}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function H2HBar({ label, value, ratio, color }: { label: string; value: number; ratio: number; color: string }) {
+  return (
+    <View style={styles.h2hRow}>
+      <View style={styles.h2hTop}>
+        <Text style={styles.h2hLabel} numberOfLines={1}>{label}</Text>
+        <Text style={[styles.h2hValue, { color }]}>{value}</Text>
+      </View>
+      <View style={styles.h2hTrack}>
+        <View style={[styles.h2hFill, { width: `${Math.max(4, Math.min(100, ratio * 100))}%`, backgroundColor: color }]} />
+      </View>
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  root: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
   },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  headerSpacer: {
-    width: 32,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  challengerSection: {
-    alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 20,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  challengerName: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  promptCard: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    padding: 16,
-    marginBottom: 16,
-  },
-  promptLabel: {
-    color: colors.accent,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  promptText: {
-    color: colors.text,
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  verdictCard: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    padding: 16,
-    marginBottom: 16,
-  },
-  verdictHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  verdictTitle: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  verdictText: {
-    color: colors.text,
-    fontSize: 14,
-    lineHeight: 22,
-  },
-  verdictExplanation: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  verdictLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  winnerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accent,
-    borderRadius: 8,
-    padding: 12,
-    gap: 8,
-  },
-  tieBadge: {
-    backgroundColor: colors.border,
-  },
-  lossBadge: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.5)',
-  },
-  winnerText: {
-    color: colors.background,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  tieText: {
-    color: colors.text,
-  },
-  lossText: {
-    color: '#ef4444',
-  },
-  summaryCard: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 16,
-    marginBottom: 16,
-  },
-  summaryTitle: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 16,
-  },
-  summaryRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
   },
-  summaryLabel: {
-    color: colors.textMuted,
-    fontSize: 14,
-    flex: 1,
-  },
-  summaryValue: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  stakeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.accent,
-    marginRight: 8,
-  },
-  stakeValue: {
-    color: colors.accent,
-  },
-  prizeValue: {
-    color: colors.accent,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  progressCard: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    marginBottom: 16,
-  },
-  progressTitle: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  refreshingPill: {
+  headerTitle: { color: colors.text, ...type.h3, fontSize: 16 },
+  content: { flex: 1, paddingHorizontal: space.xl },
+
+  // Challenger hero
+  challengerSection: { alignItems: 'center', marginTop: space.sm, marginBottom: space.xl },
+  categoryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(0, 255, 136, 0.1)',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 12,
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: space.lg,
   },
-  refreshingPillText: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: '600',
+  categoryBadgeText: { color: colors.accent, ...type.overline, fontSize: 10 },
+  avatarRing: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    borderWidth: 2,
+    borderColor: colors.borderStrong,
+    padding: 5,
+    ...glow(colors.accent, 0.2),
   },
-  progressRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  progressLabel: {
-    color: colors.textMuted,
-    fontSize: 14,
-  },
-  progressValue: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  infoCard: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    marginBottom: 24,
-  },
-  infoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  infoTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  infoText: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  footer: {
-    padding: 20,
-    paddingBottom: 8,
-    gap: 12,
-  },
-  acceptButton: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  acceptText: {
-    color: colors.background,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  declineButton: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    alignItems: 'center',
-  },
-  declineText: {
-    color: colors.textMuted,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  evaluateButton: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
+  avatar: {
+    flex: 1,
+    borderRadius: 42,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
   },
-  evaluateText: {
-    color: colors.background,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 1,
+  challengerName: { color: colors.text, ...type.h2, marginTop: space.md, textAlign: 'center' },
+
+  // Result hero
+  resultHero: {
+    alignItems: 'center',
+    padding: space.xxl,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    marginTop: space.sm,
+    marginBottom: space.lg,
   },
-  evaluateHint: {
-    color: colors.textMuted,
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  // Cancel button styles (for creators)
-  pendingInfo: {
-    flexDirection: 'row',
+  trophyRing: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    borderWidth: 2,
+    backgroundColor: 'rgba(0,0,0,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginBottom: 4,
   },
-  pendingInfoText: {
-    color: colors.textMuted,
-    fontSize: 14,
+  resultTitle: {
+    color: colors.text,
+    fontSize: 30,
+    fontWeight: '900',
+    letterSpacing: 2,
+    marginTop: space.lg,
   },
-  cancelButton: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
+  resultSub: { color: colors.textSecondary, ...type.callout, marginTop: 4, textAlign: 'center' },
+  resultAmountWrap: { marginTop: space.lg },
+  resultAmount: { fontSize: 34, fontWeight: '900', fontVariant: ['tabular-nums'] },
+
+  // Prompt
+  promptCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.error,
-    padding: 16,
-    alignItems: 'center',
+    borderColor: colors.borderStrong,
+    padding: space.lg,
+    marginBottom: space.lg,
   },
-  cancelText: {
-    color: colors.error,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cancelHint: {
-    color: colors.textMuted,
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  // Notion-specific styles
-  notionSection: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
+  promptHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  promptLabel: { color: colors.accent, ...type.overline },
+  promptText: { color: colors.text, ...type.body, fontSize: 17, lineHeight: 25 },
+
+  // Verdict
+  verdictCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 16,
-    marginBottom: 16,
+    padding: space.lg,
+    marginBottom: space.lg,
   },
-  sectionTitle: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 12,
+  verdictHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: space.md },
+  verdictTitle: { color: colors.accent, ...type.overline },
+  verdictLabel: { color: colors.textSecondary, ...type.label, marginBottom: 6 },
+  verdictText: { color: colors.text, ...type.body, lineHeight: 23 },
+
+  // Generic card
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: space.lg,
+    marginBottom: space.lg,
   },
-  notionPageSelected: {
+  cardEyebrow: { color: colors.textSecondary, ...type.overline, marginBottom: space.md },
+
+  // Summary / detail rows
+  summaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: space.lg,
+    paddingTop: space.lg,
+    marginBottom: space.lg,
+  },
+  detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingVertical: 13,
   },
-  notionPageInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  notionPageText: {
-    color: colors.text,
-    fontSize: 14,
-  },
-  refreshButton: {
-    padding: 8,
-  },
-  selectPageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 255, 136, 0.1)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    borderStyle: 'dashed',
-    padding: 16,
-    gap: 8,
-  },
-  selectPageText: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  detailRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.hairline },
+  detailLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  detailLabel: { color: colors.textSecondary, ...type.callout },
+  detailValue: { ...type.callout, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  detailValueBig: { fontSize: 18, fontWeight: '800' },
+
+  // Notion
+  notionPageSelected: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  notionPageInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  notionPageText: { color: colors.text, ...type.callout },
+  refreshButton: { padding: 8 },
   notionActivityRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    paddingVertical: 8,
   },
-  notionStats: {
+  progressLabel: { color: colors.textSecondary, ...type.callout },
+  notionStats: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  notionStatValue: { color: colors.accent, ...type.callout, fontWeight: '700' },
+  notionStatDot: { color: colors.textMuted, fontSize: 10 },
+  notionNoActivity: { color: colors.textMuted, ...type.callout, fontStyle: 'italic' },
+
+  // Progress / H2H
+  progressHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  refreshingPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: space.md,
   },
-  notionStatValue: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: '600',
+  refreshingPillText: { color: colors.accent, ...type.caption, fontWeight: '600' },
+  h2hRow: { marginBottom: space.md },
+  h2hTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  h2hLabel: { color: colors.textSecondary, ...type.callout, flex: 1, marginRight: 8 },
+  h2hValue: { ...type.bodyStrong, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  h2hTrack: { height: 8, backgroundColor: colors.surfaceMuted, borderRadius: 4, overflow: 'hidden' },
+  h2hFill: { height: '100%', borderRadius: 4 },
+  progressUnit: { color: colors.textMuted, ...type.caption, textAlign: 'center', marginTop: 2 },
+
+  // Info
+  infoCard: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    padding: space.lg,
+    marginBottom: space.lg,
   },
-  notionStatDot: {
-    color: colors.textMuted,
-    fontSize: 10,
-  },
-  notionNoActivity: {
-    color: colors.textMuted,
-    fontSize: 14,
-    fontStyle: 'italic',
-  },
-  categoryBadge: {
-    flexDirection: 'row',
+  infoHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  infoIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
+    backgroundColor: colors.accentSoft,
     alignItems: 'center',
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0, 255, 136, 0.1)',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginTop: 16,
-    gap: 6,
+    justifyContent: 'center',
   },
-  categoryBadgeText: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '600',
+  infoTitle: { color: colors.text, ...type.bodyStrong, fontSize: 15 },
+  infoText: { color: colors.textSecondary, ...type.callout, lineHeight: 21 },
+
+  // Footers
+  footer: { paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.md, gap: space.md },
+  secondaryBtn: {
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 15,
+    alignItems: 'center',
   },
-  // Accept page selection styles
-  acceptPageSection: {
-    marginBottom: 12,
+  secondaryText: { color: colors.textSecondary, ...type.bodyStrong },
+  dangerBtn: {
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.lossSoft,
+    backgroundColor: colors.lossSoft,
+    paddingVertical: 15,
+    alignItems: 'center',
   },
-  acceptPageLabel: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
+  dangerText: { color: colors.loss, ...type.bodyStrong },
+  pendingInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  pendingInfoText: { color: colors.textMuted, ...type.callout },
+  footerHint: { color: colors.textMuted, ...type.caption, textAlign: 'center' },
+
+  // Accept page selection
+  acceptPageSection: { gap: 8 },
+  acceptPageLabel: { color: colors.textSecondary, ...type.overline },
   selectedAcceptPage: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.card,
-    borderRadius: 8,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: colors.borderStrong,
     padding: 12,
   },
-  selectedAcceptPageInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  selectedAcceptPageTitle: {
-    color: colors.text,
-    fontSize: 14,
-    flex: 1,
-  },
-  changeText: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  selectAcceptPageButton: {
+  selectedAcceptPageInfo: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  selectedAcceptPageTitle: { color: colors.text, ...type.callout, flex: 1 },
+  changeText: { color: colors.accent, ...type.callout, fontWeight: '700' },
+  dashedButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0, 255, 136, 0.1)',
-    borderRadius: 8,
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: colors.borderStrong,
     borderStyle: 'dashed',
-    padding: 12,
+    padding: 14,
     gap: 8,
   },
-  selectAcceptPageText: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  acceptButtonDisabled: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  acceptTextDisabled: {
-    color: colors.textMuted,
-  },
+  dashedButtonText: { color: colors.accent, ...type.callout, fontWeight: '700' },
 });

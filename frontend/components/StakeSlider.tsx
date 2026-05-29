@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
-import { colors } from '../lib/theme';
+import { colors, radius, type, space } from '../lib/theme';
 
 interface StakeSliderProps {
   value: number; // in cents
@@ -59,8 +59,9 @@ export default function StakeSlider({ value, onChange, min = 100, max = 50000 }:
             <Text style={styles.label}>YOUR STAKE</Text>
             <Text style={styles.amount}>{formatCurrency(value)}</Text>
           </View>
+          <View style={styles.vDivider} />
           <View style={styles.column}>
-            <Text style={styles.label}>PRIZE POOL</Text>
+            <Text style={[styles.label, styles.prizeLabel]}>PRIZE POOL</Text>
             <Text style={[styles.amount, styles.prizeAmount]}>{formatCurrency(prizePool)}</Text>
           </View>
         </View>
@@ -84,33 +85,38 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   card: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 16,
+    padding: space.lg,
   },
   row: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
   },
   column: {
+    flex: 1,
     alignItems: 'center',
   },
+  vDivider: { width: 1, height: 40, backgroundColor: colors.hairline },
   label: {
     color: colors.textMuted,
+    ...type.overline,
     fontSize: 10,
-    fontWeight: '600',
     marginBottom: 4,
   },
+  prizeLabel: { color: colors.secondary },
   amount: {
     color: colors.text,
-    fontSize: 32,
-    fontWeight: '700',
+    fontSize: 30,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
   prizeAmount: {
-    color: colors.accent,
+    color: colors.secondary,
   },
   sliderContainer: {
     marginBottom: 8,

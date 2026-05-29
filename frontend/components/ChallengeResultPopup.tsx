@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Modal, Animated, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../lib/theme';
+import { colors, radius, type, space, glow } from '../lib/theme';
+import Gradient from './ui/Gradient';
 
 interface ChallengeResultPopupProps {
   visible: boolean;
@@ -22,18 +23,16 @@ export default function ChallengeResultPopup({
 
   useEffect(() => {
     if (visible) {
-      // Reset animations
       scaleAnim.setValue(0);
       opacityAnim.setValue(0);
       bounceAnim.setValue(0);
 
-      // Start animation sequence
       Animated.sequence([
         Animated.parallel([
           Animated.spring(scaleAnim, {
             toValue: 1,
-            friction: 4,
-            tension: 100,
+            friction: 5,
+            tension: 110,
             useNativeDriver: true,
           }),
           Animated.timing(opacityAnim, {
@@ -45,7 +44,7 @@ export default function ChallengeResultPopup({
         Animated.loop(
           Animated.sequence([
             Animated.timing(bounceAnim, {
-              toValue: -10,
+              toValue: -8,
               duration: 300,
               easing: Easing.inOut(Easing.ease),
               useNativeDriver: true,
@@ -61,47 +60,42 @@ export default function ChallengeResultPopup({
         ),
       ]).start();
 
-      // Auto dismiss after 2.5 seconds
-      const timer = setTimeout(onDismiss, 2500);
+      const timer = setTimeout(onDismiss, 2600);
       return () => clearTimeout(timer);
     }
   }, [visible]);
 
   const formatAmount = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+  const accentColor = isWin ? colors.accent : colors.loss;
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
       <View style={styles.overlay}>
         <Animated.View
-          style={[
-            styles.container,
-            isWin ? styles.containerWin : styles.containerLose,
-            {
-              transform: [
-                { scale: scaleAnim },
-                { translateY: bounceAnim },
-              ],
-              opacity: opacityAnim,
-            },
-          ]}
+          style={{
+            transform: [{ scale: scaleAnim }, { translateY: bounceAnim }],
+            opacity: opacityAnim,
+          }}
         >
-          <Ionicons
-            name={isWin ? 'trophy' : 'sad'}
-            size={64}
-            color={isWin ? '#FFD700' : colors.textMuted}
-          />
-
-          <Text style={styles.title}>{isWin ? 'VICTORY!' : 'DEFEATED'}</Text>
-
-          <Text style={[styles.amount, isWin ? styles.amountWin : styles.amountLose]}>
-            {isWin ? '+' : '-'}{formatAmount(amount)}
-          </Text>
-
-          <Text style={styles.subtitle}>
-            {isWin
-              ? 'Great job! Your balance has been updated.'
-              : 'Better luck next time!'}
-          </Text>
+          <Gradient
+            colors={isWin ? ['#0d5a39', '#0e3826'] : ['#4a2230', '#0e3826']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            radius={radius.xl}
+            style={[styles.container, { borderColor: accentColor }, glow(accentColor, 0.35)]}
+          >
+            <View style={[styles.iconRing, { borderColor: accentColor }]}>
+              <Ionicons name={isWin ? 'trophy' : 'flag'} size={44} color={accentColor} />
+            </View>
+            <Text style={styles.title}>{isWin ? 'VICTORY!' : 'DEFEATED'}</Text>
+            <Text style={[styles.amount, { color: accentColor }]}>
+              {isWin ? '+' : '-'}
+              {formatAmount(amount)}
+            </Text>
+            <Text style={styles.subtitle}>
+              {isWin ? 'The pot is yours — balance updated.' : 'Better luck next battle.'}
+            </Text>
+          </Gradient>
         </Animated.View>
       </View>
     </Modal>
@@ -111,46 +105,43 @@ export default function ChallengeResultPopup({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: space.xl,
   },
   container: {
-    backgroundColor: colors.card,
-    borderRadius: 24,
-    padding: 32,
     alignItems: 'center',
-    borderWidth: 3,
-    minWidth: 280,
+    padding: space.xxxl,
+    borderWidth: 2,
+    minWidth: 300,
   },
-  containerWin: {
-    borderColor: colors.accent,
-  },
-  containerLose: {
-    borderColor: colors.error,
+  iconRing: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    borderWidth: 2,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: space.lg,
   },
   title: {
     color: colors.text,
     fontSize: 28,
     fontWeight: '900',
     letterSpacing: 2,
-    marginTop: 16,
-    marginBottom: 8,
+    marginBottom: space.sm,
   },
   amount: {
-    fontSize: 36,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  amountWin: {
-    color: colors.accent,
-  },
-  amountLose: {
-    color: colors.error,
+    fontSize: 38,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+    marginBottom: space.md,
   },
   subtitle: {
-    color: colors.textMuted,
-    fontSize: 14,
+    color: colors.textSecondary,
+    ...type.callout,
     textAlign: 'center',
   },
 });
