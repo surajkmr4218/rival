@@ -4,7 +4,7 @@
 
 ### Put your money where your goals are.
 
-**Rival is a 1v1 productivity-betting app where two people stake real money on measurable goals and an AI referee, backed by live data from GitHub and Notion, decides who wins.**
+**Rival is a 1v1 productivity-betting app where two people stake money on measurable goals and an AI referee, backed by live data from GitHub and Notion, decides who wins.**
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
