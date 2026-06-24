@@ -34,9 +34,10 @@ class ConnectionManager:
         if not sockets:
             return
         sockets.discard(websocket)
+        remaining = len(sockets)          # read BEFORE popping the key
         if not sockets:
             self._connections.pop(user_id, None)
-        logger.info("WS disconnected: user %s (%d open)", user_id, len(self._connections[user_id]))
+        logger.info("WS disconnected: user %s (%d open)", user_id, remaining)
 
     async def send_to_users(self, user_ids: list[int], payload: dict) -> None:
         """Push a JSON payload to every open socket of every listed user.
