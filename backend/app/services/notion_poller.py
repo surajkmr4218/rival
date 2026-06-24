@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from app.core.clock import utcnow
+from app.core.ws import broadcast_challenge
 from app.core.database import SessionLocal
 from app.core.notion import NotionClient
 from app.models.challenge import Challenge, ChallengeCategory, ChallengeStatus
@@ -73,6 +74,11 @@ async def poll_active_studying_challenges() -> None:
 
         db.commit()
 
+        # Push fresh study progress to both players of each polled challenge.
+        for challenge in challenges:
+            db.refresh(challenge)
+            await broadcast_challenge(challenge)
+            
     except Exception as e:
         logger.error(f"Error in Notion polling loop: {e}")
         db.rollback()

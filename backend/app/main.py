@@ -9,7 +9,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.rate_limit import limiter
-from app.routers import auth, users, challenges, github, notion
+from app.routers import auth, users, challenges, github, notion, ws
 from app.services.notion_poller import start_polling_loop
 
 # Configure logging
@@ -70,6 +70,7 @@ app.include_router(users.router)
 app.include_router(challenges.router)
 app.include_router(github.router)
 app.include_router(notion.router)
+app.include_router(ws.router)
 
 
 @app.get("/health")

@@ -15,6 +15,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.clock import utcnow
+from app.core.ws import broadcast_challenge
 from app.core.database import SessionLocal
 from app.core.gemini import GeminiQuotaExhausted, get_referee
 from app.core.github import GitHubClient
@@ -405,6 +406,8 @@ async def run_evaluation(challenge_id: int) -> None:
 
         _finalize_evaluation(db, challenge, verdict)
         db.commit()
+        db.refresh(challenge)                    # ← add: reload the committed row
+        await broadcast_challenge(challenge)     # ← add: push verdict to both players
         logger.info(f"Challenge {challenge_id} evaluated: winner_id={challenge.winner_id}")
     except GeminiQuotaExhausted as e:
         # Don't dump a stack trace for this — it's an expected operational

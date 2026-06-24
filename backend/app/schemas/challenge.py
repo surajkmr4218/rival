@@ -12,7 +12,6 @@ class UserPublic(BaseModel):
     class Config:
         from_attributes = True
 
-
 class ChallengeCreate(BaseModel):
     """Schema for creating a new challenge."""
     category: ChallengeCategory
@@ -51,12 +50,10 @@ class ChallengeCreate(BaseModel):
             raise ValueError("Duration cannot exceed 168 hours (1 week)")
         return v
 
-
 class ChallengeAccept(BaseModel):
     """Schema for accepting a challenge."""
     # For studying challenges: opponent selects their page when accepting
     opponent_notion_page_id: Optional[str] = None
-
 
 class ChallengeResponse(BaseModel):
     """Schema for challenge responses."""
@@ -94,11 +91,9 @@ class ChallengeResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
 class ChallengeList(BaseModel):
     """Schema for list of challenges."""
     challenges: list[ChallengeResponse]
-
 
 class AIVerdictResponse(BaseModel):
     """Schema for AI evaluation response."""
@@ -107,10 +102,47 @@ class AIVerdictResponse(BaseModel):
     creator_summary: str
     opponent_summary: str
 
-
 class UserSearchRequest(BaseModel):
     query: str
 
-
 class UserSearchResponse(BaseModel):
     users: list[UserPublic]
+
+
+def challenge_to_response(c) -> ChallengeResponse:
+    """Build the API response shape from a Challenge model row.
+
+    Single source of truth — used by REST routes AND WebSocket broadcasts so
+    the frontend always sees one consistent shape.
+    """
+    return ChallengeResponse(
+        id=c.id,
+        creator=UserPublic(id=c.creator.id, username=c.creator.username, email=c.creator.email),
+        opponent=(
+            UserPublic(id=c.opponent.id, username=c.opponent.username, email=c.opponent.email)
+            if c.opponent
+            else None
+        ),
+        category=c.category,
+        stake_cents=c.stake_cents,
+        prize_pool_cents=c.stake_cents * 2,
+        challenge_prompt=c.challenge_prompt,
+        duration_hours=c.duration_hours or 24,
+        goal_type=c.goal_type,
+        goal_value=c.goal_value,
+        goal_period=c.goal_period,
+        status=c.status,
+        creator_progress=c.creator_progress,
+        opponent_progress=c.opponent_progress,
+        winner_id=c.winner_id,
+        ai_verdict=c.ai_verdict,
+        ai_evaluated_at=c.ai_evaluated_at,
+        creator_notion_page_id=c.creator_notion_page_id,
+        opponent_notion_page_id=c.opponent_notion_page_id,
+        creator_notion_activity=c.creator_notion_activity,
+        opponent_notion_activity=c.opponent_notion_activity,
+        created_at=c.created_at,
+        accepted_at=c.accepted_at,
+        ends_at=c.ends_at,
+        completed_at=c.completed_at,
+    )
