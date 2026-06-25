@@ -15,10 +15,13 @@ import Gradient from '../../components/ui/Gradient';
 import PrimaryButton from '../../components/ui/PrimaryButton';
 import SectionHeader from '../../components/ui/SectionHeader';
 import { useAuth } from '../../lib/auth';
+import { useRealtime } from '../../lib/realtime';
 
 export default function DashboardScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const lastChallenge = useRealtime((s) => s.lastChallenge);
+  const wsConnected = useRealtime((s) => s.connected);
   const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
   const [outgoingPending, setOutgoingPending] = useState<Challenge[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
@@ -51,14 +54,30 @@ export default function DashboardScreen() {
     }, [loadData])
   );
 
-  // Auto-refresh while any challenge is being AI-evaluated so the dashboard
-  // flips EVALUATING → WON/LOST without a manual pull-to-refresh.
+  // Real-time push: when the server sends an updated challenge, merge it into
+  // the list instead of waiting for a poll. If it's one we aren't showing yet
+  // (e.g. a brand-new active battle), refetch the lists once.
   useEffect(() => {
+    if (!lastChallenge) return;
+    setActiveChallenges((prev) => {
+      const exists = prev.some((c) => c.id === lastChallenge.id);
+      if (exists) {
+        return prev.map((c) => (c.id === lastChallenge.id ? lastChallenge : c));
+      }
+      loadData();
+      return prev;
+    });
+  }, [lastChallenge]);
+
+  // Fallback only: if the realtime socket is down, fall back to polling so an
+  // EVALUATING challenge still resolves. When the socket is healthy this never runs.
+  useEffect(() => {
+    if (wsConnected) return;
     const hasEvaluating = activeChallenges.some((c) => c.status === 'evaluating');
     if (!hasEvaluating) return;
     const interval = setInterval(loadData, 8000);
     return () => clearInterval(interval);
-  }, [activeChallenges, loadData]);
+  }, [wsConnected, activeChallenges, loadData]);
 
   const onRefresh = () => {
     setIsRefreshing(true);

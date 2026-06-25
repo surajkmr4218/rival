@@ -24,6 +24,7 @@ import {
   refreshChallengeProgress,
 } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { useRealtime } from '../../lib/realtime';
 import NotionPagePicker from '../../components/NotionPagePicker';
 import ChallengeResultPopup from '../../components/ChallengeResultPopup';
 import AnimatedMount from '../../components/anim/AnimatedMount';
@@ -47,6 +48,15 @@ export default function ChallengeDetailScreen() {
   const [selectedAcceptPage, setSelectedAcceptPage] = useState<NotionPage | null>(null);
   const [showResultPopup, setShowResultPopup] = useState(false);
   const cancelledRef = useRef(false);
+  const lastChallenge = useRealtime((s) => s.lastChallenge);
+
+  // Real-time push: replace this challenge whenever the server sends an update
+  // for THIS id (live verdict + opponent progress, no manual refresh).
+  useEffect(() => {
+    if (lastChallenge && id && lastChallenge.id === parseInt(id)) {
+      setChallenge(lastChallenge);
+    }
+  }, [lastChallenge, id]);
 
   useEffect(() => {
     cancelledRef.current = false;
